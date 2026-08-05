@@ -277,6 +277,7 @@ then asserts that every KPI and every chart on all 21 dashboards resolves and re
 | Purpose | Endpoint | Scope |
 | --- | --- | --- |
 | Authorize / token | `authentication/v2/authorize`, `/token` | — |
+| Hub membership gate | `GET project/v1/hubs` | `data:read` |
 | Hub projects | `GET construction/admin/v1/accounts/:hub/projects` | `account:read` |
 | Create request | `POST data-connector/v1/accounts/:hub/requests` | `data:create` |
 | List jobs | `GET data-connector/v1/accounts/:hub/jobs` | `data:read` |
@@ -310,6 +311,74 @@ so it reads on the black header only; don't reuse it on the light surfaces.
 
 Type is Artifakt Legend for headings and Artifakt Element for body, with Arial as the sole fallback
 and the two never mixed.
+
+---
+
+## Deploying it for other people
+
+Running this on localhost for yourself and running it for a team are different
+propositions. The difference is **the local cache**.
+
+Everything the app calls with the signed-in user's token — Admin reads, Data Connector, the Manage
+writes — is permission-checked by Autodesk. But the dashboards and activity views are served from
+this app's own SQLite cache, so nothing upstream is checking those. Authentication alone would let
+any Autodesk account read the whole extract.
+
+So access is gated on **hub membership**: at sign-in, and every 30 minutes thereafter, the app asks
+Data Management which hubs the account can reach (`GET /project/v1/hubs`) and requires
+`FORMA_HUB_ID` to be among them. Anyone else gets a 403 that explains why. The check fails closed —
+a network error or a 5xx from Autodesk denies access rather than allowing it — and re-running it on
+a timer means someone removed from the hub loses access without anyone having to remember to
+revoke it. See [`src/lib/aps/authorization.ts`](src/lib/aps/authorization.ts).
+
+If you need this tighter (say, extract submission limited to a few people because the Data
+Connector quota is 24 jobs per hub per 24 hours, shared), add a named-user check on top.
+
+### Before the first deploy
+
+1. **Rotate the client secret** if it has ever been pasted into a chat, ticket or doc, and set the
+   new one only in your platform's secret store.
+2. **Register the deployment's callback URL** on the APS app — `https://your-host/api/aps/callback`
+   — and set `APS_CALLBACK_URL` to match exactly. It must be https: the session cookie's `Secure`
+   flag is derived from this value.
+3. **Provision a persistent volume** at `/data`. Without one the uploaded extract, activity cache
+   and all sessions vanish on restart.
+4. **Re-consent.** Existing sessions predate the `account:write` scope; sign out and back in or the
+   Manage writes return 403.
+
+### Running it
+
+```bash
+docker compose up --build
+```
+
+`docker-compose.yml` reads secrets from the host environment rather than baking them into the file.
+The image is a standalone Next.js server on Node 24 — no database server, no native modules.
+Adapt it to whatever platform you use; the only hard requirements are a writable volume at `/data`
+and the four environment variables.
+
+`GET /api/health` is the probe. It returns 503 while config is incomplete or the volume isn't
+writable, 200 otherwise, and exposes no hub data.
+
+### Choosing a host
+
+**Container or VM with a volume** — ECS/Fargate with EFS, an internal PaaS, a plain VM. Works as
+built.
+
+**Serverless (Vercel and similar) will not work unchanged.** The filesystem is ephemeral, so
+`node:sqlite` has nowhere to live: uploads fail and the cache evaporates between requests. Going
+that route means moving the dataset, activity cache and session store to a hosted database — the
+largest change on this list.
+
+**Just sharing the code** is also a legitimate answer. Each person runs it locally with their own
+APS credentials and their own cache; nothing is centrally hosted and there is no shared data to
+protect.
+
+### Where the data lives
+
+The volume holds real hub data — project names, member emails, activity, cost figures. Host it
+somewhere sanctioned for that, and put the deployment through whatever security and privacy review
+your team normally requires before sharing the URL.
 
 ---
 
