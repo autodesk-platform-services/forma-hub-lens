@@ -1,0 +1,12 @@
+node_modules
+.next
+.git
+.data
+.env
+.env.local
+.env*.local
+*.log
+.DS_Store
+sample-extract.zip
+scripts/*.test.ts
+README.md

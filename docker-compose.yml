@@ -1,0 +1,34 @@
+# Reference deployment. Adapt to whatever container platform you land on —
+# the only hard requirements are a persistent volume at /data and the four
+# environment variables below.
+#
+#   docker compose up --build
+#
+# Secrets: this reads them from the host environment rather than baking them
+# into the file, so nothing sensitive is committed. Export them first, or point
+# your platform's secret store at the same variable names.
+
+services:
+  forma-hub-lens:
+    build: .
+    image: forma-hub-lens:latest
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      APS_CLIENT_ID: ${APS_CLIENT_ID:?set APS_CLIENT_ID}
+      APS_CLIENT_SECRET: ${APS_CLIENT_SECRET:?set APS_CLIENT_SECRET}
+      # Must exactly match a callback URL registered on the APS app, and must
+      # be https in any shared deployment — the session cookie's Secure flag
+      # keys off this value.
+      APS_CALLBACK_URL: ${APS_CALLBACK_URL:?set APS_CALLBACK_URL}
+      FORMA_HUB_ID: ${FORMA_HUB_ID:?set FORMA_HUB_ID}
+      FORMA_REGION: ${FORMA_REGION:-}
+      DATA_DIR: /data
+    volumes:
+      # Holds the uploaded extract, the activity cache and all sessions.
+      # Losing it means re-uploading and re-ingesting; treat it as sensitive.
+      - forma-hub-lens-data:/data
+
+volumes:
+  forma-hub-lens-data:

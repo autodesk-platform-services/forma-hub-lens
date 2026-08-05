@@ -1,0 +1,22 @@
+# dependencies
+/node_modules
+/.pnp
+.pnp.*
+
+# next.js
+/.next/
+/out/
+next-env.d.ts
+*.tsbuildinfo
+
+# secrets — never commit
+.env
+.env.local
+.env*.local
+
+# local extract cache (contains hub data)
+/.data/
+
+# misc
+.DS_Store
+*.log

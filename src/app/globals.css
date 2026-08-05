@@ -1,0 +1,91 @@
+@import "tailwindcss";
+
+/*
+ * Autodesk brand theme.
+ *
+ * Artifakt is Autodesk-proprietary. Per the brand rules, Arial is the sole
+ * fallback and the two are never mixed — so each family lists Artifakt first
+ * and Arial as the only fallback.
+ */
+@theme {
+  /* dk1 / lt1 / dk2 / lt2 */
+  --color-adsk-black: #000000;
+  --color-adsk-white: #ffffff;
+  --color-adsk-gray: #666666;
+  --color-adsk-offwhite: #f5f5f0;
+
+  /* accent1..6 */
+  --color-adsk-gold: #f09d4f;
+  /* accent2 — defined for palette completeness; the UI uses Yellow as its action accent. */
+  --color-adsk-flame: #f2510a;
+  --color-adsk-blue: #1d91d0;
+  --color-adsk-teal: #2ad0a9;
+  --color-adsk-yellow: #fffe00;
+  --color-adsk-lightgray: #d5d5cb;
+
+  /* hlink / folHlink */
+  --color-adsk-link: #1278af;
+  --color-adsk-linkvisited: #d34612;
+
+  --font-legend: "Artifakt Legend", Arial, sans-serif;
+  --font-element: "Artifakt Element", Arial, sans-serif;
+}
+
+html,
+body {
+  background: var(--color-adsk-offwhite);
+  color: var(--color-adsk-black);
+}
+
+body {
+  font-family: var(--font-element);
+  font-feature-settings: "tnum" 1;
+}
+
+/* Artifakt Legend Bold for every heading and badge. */
+h1,
+h2,
+h3,
+h4,
+.font-legend {
+  font-family: var(--font-legend);
+  font-weight: 700;
+}
+
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Dark surfaces: black background, white body text, yellow titles. */
+.surface-dark {
+  background: var(--color-adsk-black);
+  color: var(--color-adsk-white);
+}
+.surface-dark h1,
+.surface-dark h2,
+.surface-dark .title-on-dark {
+  color: var(--color-adsk-yellow);
+}
+
+a.link {
+  color: var(--color-adsk-link);
+}
+a.link:visited {
+  color: var(--color-adsk-linkvisited);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-adsk-lightgray);
+  border-radius: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+dialog::backdrop {
+  background: rgb(0 0 0 / 0.62);
+}
