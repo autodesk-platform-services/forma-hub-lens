@@ -4,12 +4,17 @@ import { revalidatePath } from "next/cache";
 import { requireSession } from "@/lib/aps/auth";
 import {
   createProject,
+  fetchProjectStatus,
   fetchProjectUsers,
   importProjectUsers,
+  NotAccountAdminError,
   productKeysFor,
   removeProjectUser,
+  requireAccountAdmin,
+  setProjectStatus,
   type ImportUser,
 } from "@/lib/aps/hubAdmin";
+import { markProjectsArchived } from "@/lib/aps/admin";
 
 export type ManageState = {
   ok: boolean;
@@ -220,6 +225,96 @@ export async function bulkCreateProjects(
       ok: created === rows.length,
       message: `Created ${created} of ${rows.length} project(s).`,
       detail: detail.slice(0, 15),
+    };
+  } catch (error) {
+    return { ok: false, message: describe(error) };
+  }
+}
+
+const MAX_ARCHIVE_PER_RUN = 50;
+
+/**
+ * Moves projects from active to archived. Never deletes: the only field sent to
+ * Autodesk is `status`, and the reverse (archived -> active) is a one-field
+ * change away in Forma if this is ever run in error.
+ */
+export async function bulkArchiveProjects(
+  _prev: ManageState,
+  formData: FormData,
+): Promise<ManageState> {
+  try {
+    const session = await requireSession();
+
+    // The archive endpoint runs on app credentials, so it does not check who is
+    // asking. Gate it on account-admin before anything else happens.
+    try {
+      await requireAccountAdmin(session);
+    } catch (error) {
+      if (error instanceof NotAccountAdminError) return { ok: false, message: error.message };
+      throw error;
+    }
+
+    const projectIds = [...new Set(formData.getAll("projectIds").map(String).filter(Boolean))];
+    if (projectIds.length === 0) return { ok: false, message: "Select at least one project." };
+    if (projectIds.length > MAX_ARCHIVE_PER_RUN) {
+      return {
+        ok: false,
+        message: `${projectIds.length} projects selected; archive at most ${MAX_ARCHIVE_PER_RUN} at a time.`,
+      };
+    }
+
+    if (String(formData.get("confirm") ?? "").trim() !== "ARCHIVE") {
+      return { ok: false, message: 'Type ARCHIVE in the confirmation box to run this.' };
+    }
+
+    const detail: string[] = [];
+    const archived: string[] = [];
+    let skipped = 0;
+    let failed = 0;
+
+    for (const projectId of projectIds) {
+      // Read the live status rather than trusting the cache: a project archived
+      // by someone else in the meantime should be left alone, not re-written.
+      const current = await fetchProjectStatus(projectId);
+      if (!current) {
+        failed++;
+        detail.push(`${projectId}: could not read current status — skipped`);
+        continue;
+      }
+      if (current.status === "archived") {
+        skipped++;
+        detail.push(`${current.name}: already archived — skipped`);
+        continue;
+      }
+      if (current.status !== "active") {
+        skipped++;
+        detail.push(`${current.name}: status is "${current.status}", not active — skipped`);
+        continue;
+      }
+
+      try {
+        const result = await setProjectStatus(projectId, "archived");
+        archived.push(projectId);
+        detail.push(`${current.name}: active → ${result.status}`);
+      } catch (error) {
+        failed++;
+        detail.push(`${current.name}: FAILED — ${describe(error)}`);
+      }
+    }
+
+    if (archived.length > 0) markProjectsArchived(archived);
+    revalidatePath("/", "layout");
+
+    const parts = [`Archived ${archived.length} of ${projectIds.length} selected`];
+    if (skipped) parts.push(`${skipped} skipped`);
+    if (failed) parts.push(`${failed} failed`);
+
+    return {
+      ok: failed === 0 && archived.length > 0,
+      message:
+        parts.join(", ") +
+        ". Archived projects keep all their data and can be set back to active in Forma.",
+      detail: detail.slice(0, 25),
     };
   } catch (error) {
     return { ok: false, message: describe(error) };

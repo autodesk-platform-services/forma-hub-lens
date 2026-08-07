@@ -3,6 +3,7 @@
 import { useActionState, useState } from "react";
 import {
   bulkAddMembers,
+  bulkArchiveProjects,
   bulkCreateProjects,
   bulkRemoveMembers,
   type ManageState,
@@ -274,5 +275,130 @@ export function Tabs({
       </div>
       <div className="pt-5">{tabs.find((tab) => tab.id === active)?.content}</div>
     </div>
+  );
+}
+
+/**
+ * Bulk archive. Only active projects are offered — archiving is a move from
+ * active to archived, so anything already archived or suspended is not a
+ * candidate and is left out of the picker entirely.
+ */
+export function ArchiveProjectsPanel({ projects }: { projects: Project[] }) {
+  const [state, action, pending] = useActionState<ManageState, FormData>(
+    bulkArchiveProjects,
+    null,
+  );
+  const [filter, setFilter] = useState("");
+  const [selected, setSelected] = useState<string[]>([]);
+
+  const active = projects.filter((p) => p.status === "active");
+  const shown = active.filter((p) => p.name.toLowerCase().includes(filter.trim().toLowerCase()));
+
+  const toggle = (id: string) =>
+    setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+
+  return (
+    <form action={action} className="space-y-4">
+      <p className="rounded border border-adsk-lightgray bg-adsk-offwhite px-3 py-2 text-xs text-adsk-black">
+        Archiving moves a project from <strong>Active</strong> to <strong>Archived</strong>. Nothing
+        is deleted — the project keeps all of its data and members, and it can be set back to active
+        in Forma. Archived projects disappear from users&apos; active project lists.
+      </p>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <div>
+          <label className={label} htmlFor="archiveFilter">
+            Active projects{" "}
+            <span className="normal-case">({active.length} of {projects.length})</span>
+          </label>
+          <input
+            id="archiveFilter"
+            className={input}
+            placeholder="Filter by name…"
+            value={filter}
+            onChange={(event) => setFilter(event.target.value)}
+          />
+          <div className="mt-1 max-h-56 overflow-auto rounded border border-adsk-lightgray bg-adsk-white">
+            {shown.length === 0 ? (
+              <p className="px-2.5 py-2 text-[11px] text-adsk-gray">No active projects match.</p>
+            ) : (
+              <ul>
+                {shown.map((project) => (
+                  <li key={project.id}>
+                    <label className="flex cursor-pointer items-center gap-2 border-b border-adsk-offwhite px-2.5 py-1.5 text-xs text-adsk-black last:border-b-0 hover:bg-adsk-offwhite">
+                      <input
+                        type="checkbox"
+                        name="projectIds"
+                        value={project.id}
+                        checked={selected.includes(project.id)}
+                        onChange={() => toggle(project.id)}
+                        className="accent-adsk-yellow"
+                      />
+                      <span className="truncate">{project.name}</span>
+                    </label>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+          <p className="mt-1 text-[10px] text-adsk-gray">
+            {shown.length} shown · <strong>{selected.length} selected</strong>
+          </p>
+        </div>
+
+        <div className="space-y-3">
+          <div>
+            <span className={label}>Selected for archiving</span>
+            <div className="mt-1 max-h-40 overflow-auto rounded border border-adsk-lightgray bg-adsk-white px-2.5 py-2">
+              {selected.length === 0 ? (
+                <p className="text-[11px] text-adsk-gray">Nothing selected yet.</p>
+              ) : (
+                <ul className="space-y-0.5">
+                  {selected.map((id) => (
+                    <li key={id} className="truncate text-[11px] text-adsk-black">
+                      {/* look up across all projects: once archived, a project
+                          leaves `active` and would otherwise show as a raw id */}
+                      {projects.find((p) => p.id === id)?.name ?? id}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+
+          <div className="max-w-xs">
+            <label className={label} htmlFor="archiveConfirm">
+              Type ARCHIVE to confirm
+            </label>
+            <input id="archiveConfirm" name="confirm" className={input} autoComplete="off" />
+          </div>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3">
+        <button
+          type="submit"
+          disabled={pending || selected.length === 0}
+          className="rounded border border-adsk-lightgray bg-adsk-yellow px-3 py-1.5 font-legend text-xs text-adsk-black hover:opacity-90 disabled:opacity-50"
+        >
+          {pending
+            ? "Archiving…"
+            : `Archive ${selected.length || ""} project${selected.length === 1 ? "" : "s"}`.trim()}
+        </button>
+        {selected.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setSelected([])}
+            className="text-xs text-adsk-gray hover:text-adsk-black"
+          >
+            Clear selection
+          </button>
+        )}
+        <span className="text-[10px] text-adsk-gray">
+          Requires Autodesk account administrator rights · max 50 per run
+        </span>
+      </div>
+      <Result state={state} />
+    </form>
   );
 }

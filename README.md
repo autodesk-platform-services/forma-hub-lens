@@ -199,6 +199,7 @@ All of these write to the live hub and need `account:write`.
 | Bulk add members | `POST construction/admin/v2/projects/:projectId/users:import` (≤200 per call) |
 | Bulk remove members | `DELETE construction/admin/v1/projects/:projectId/users/:userId` |
 | Bulk create projects | `POST construction/admin/v1/accounts/:hub/projects` (≤50 per run) |
+| **Bulk archive projects** | `PATCH hq/v1/accounts/:hub/projects/:id` — see below (≤50 per run) |
 | Companies | `GET construction/admin/v1/accounts/:hub/companies` |
 | Roles | read from `admin_project_roles.csv` in the extract |
 
@@ -207,6 +208,37 @@ out across projects. Removal requires typing `REMOVE` to confirm.
 
 There is **no hub-wide "list roles" endpoint** in the Forma Admin API, so the Roles view reads
 `admin_project_roles.csv` from the uploaded extract.
+
+### Archiving projects
+
+Archive moves a project from **Active** to **Archived**. Nothing is deleted — the project keeps all
+its data and members, it drops off users' active project lists, and it can be set back to active.
+
+This one is unusual, so it's worth knowing why:
+
+- The **Forma Hub Admin API has no project update endpoint** at all; the only PATCH on a project is
+  `/image`. So archiving goes through the older BIM 360 Account Admin endpoint,
+  `PATCH hq/v1/accounts/:hub/projects/:id`, with a body of exactly `{"status":"archived"}`.
+- Autodesk's [Forma compatibility table](https://aps.autodesk.com/en/docs/acc/v1/overview/bim360-compatibility/compatibility-table/)
+  marks that endpoint **"No"** for Forma projects. **That is out of date.** Verified against a live
+  Forma-platform (`acc`) project on this hub: archive returned 200, the status changed, the Forma
+  Admin API reflected it, and restoring to active worked the same way. If Autodesk ships a native
+  Hub Admin equivalent, switch to it.
+- The endpoint is **app-only**, so it needs a two-legged token. That is the one place in this app
+  that doesn't act as the signed-in user, which means Autodesk is *not* checking that person's
+  permissions.
+
+Because of that last point, the archive action calls `requireAccountAdmin()` first: it looks the
+signed-in user up in the hub directory and requires `access_level === "account_admin"`. It fails
+closed — if the lookup errors, access is denied. Hub membership alone is not enough here, unlike
+everywhere else in the tool.
+
+Other guards: only projects currently **active** are offered; each project's live status is
+re-read immediately before writing, so anything already archived (or suspended) is skipped rather
+than overwritten; you must type `ARCHIVE` to confirm; and a run is capped at 50 projects.
+
+There is no un-archive in the UI. Restoring is the same one-field change in reverse
+(`{"status":"active"}`) and can be done in Forma, or ask and it's a small addition here.
 
 ### Product access mapping
 
@@ -261,7 +293,7 @@ src/
 Storage is the Node 22+ built-in `node:sqlite`, so there is no native dependency to compile.
 
 ```bash
-npm test              # 23 tests: CSV reader, column mapper, and all 21 dashboards end-to-end
+npm test              # 43 tests: CSV reader, column mapper, all 21 dashboards, hub gate, archive guards
 npm run typecheck
 npm run build
 npm run sample-extract   # writes sample-extract.zip — a synthetic extract for trying the Tools tab
@@ -287,6 +319,8 @@ then asserts that every KPI and every chart on all 21 dashboards resolves and re
 | Bulk add members | `POST construction/admin/v2/projects/:id/users:import` | `account:write` |
 | Remove member | `DELETE construction/admin/v1/projects/:id/users/:userId` | `account:write` |
 | Create project | `POST construction/admin/v1/accounts/:hub/projects` | `account:write` |
+| Archive project | `PATCH hq/v1/accounts/:hub/projects/:id` | `account:write` (2-legged) |
+| Admin check | `GET hq/v1/accounts/:hub/users/search` | `account:read` (2-legged) |
 
 ---
 

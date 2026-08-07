@@ -157,3 +157,21 @@ export function projectNameMap(): Map<string, string> {
   for (const project of cachedProjects()) map.set(project.id.toLowerCase(), project.name);
   return map;
 }
+
+/**
+ * Reflects an archive in the local project mirror straight away, so the UI
+ * updates without waiting for the next full Sync projects.
+ */
+export function markProjectsArchived(projectIds: string[]): void {
+  if (projectIds.length === 0) return;
+  const db = getDb();
+  const update = db.prepare("UPDATE projects SET status = 'archived' WHERE id = ?");
+  db.exec("BEGIN");
+  try {
+    for (const id of projectIds) update.run(id);
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
+}

@@ -6,13 +6,19 @@ import type { Session } from "./auth";
 export const APS_BASE = "https://developer.api.autodesk.com";
 
 export class ApsError extends Error {
-  constructor(
-    readonly status: number,
-    readonly url: string,
-    readonly body: string,
-  ) {
+  // Assigned in the body rather than via parameter properties: those need a
+  // TypeScript emit step, and the tests run this source directly through Node's
+  // strip-only type stripping.
+  readonly status: number;
+  readonly url: string;
+  readonly body: string;
+
+  constructor(status: number, url: string, body: string) {
     super(`${status} from ${url}: ${summarise(body)}`);
     this.name = "ApsError";
+    this.status = status;
+    this.url = url;
+    this.body = body;
   }
 }
 

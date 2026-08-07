@@ -9,10 +9,11 @@
     "start": "next start -p 3000",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "test": "npm run test:parsing && npm run test:dashboards && npm run test:auth",
+    "test": "npm run test:parsing && npm run test:dashboards && npm run test:auth && npm run test:archive",
     "test:parsing": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test scripts/parsing.test.ts",
     "test:dashboards": "node --conditions=react-server --import ./scripts/resolve-ts.mjs --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test scripts/dashboards.test.ts",
     "test:auth": "node --conditions=react-server --import ./scripts/resolve-ts.mjs --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test scripts/authorization.test.ts",
+    "test:archive": "node --conditions=react-server --import ./scripts/resolve-ts.mjs --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test scripts/archive.test.ts",
     "sample-extract": "node --conditions=react-server --import ./scripts/resolve-ts.mjs --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/make-sample-extract.ts sample-extract.zip"
   },
   "dependencies": {

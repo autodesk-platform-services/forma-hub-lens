@@ -5,10 +5,9 @@ import { cookies } from "next/headers";
 import { getDb } from "../db";
 import { env } from "../env";
 import { HUB_CHECK_TTL_MS, verifyHubAccess } from "./authorization";
+import { AUTHORIZE_URL, TOKEN_URL, USERINFO_URL } from "./endpoints";
 
-export const AUTHORIZE_URL = "https://developer.api.autodesk.com/authentication/v2/authorize";
-export const TOKEN_URL = "https://developer.api.autodesk.com/authentication/v2/token";
-export const USERINFO_URL = "https://api.userprofile.autodesk.com/userinfo";
+export { AUTHORIZE_URL, TOKEN_URL, USERINFO_URL } from "./endpoints";
 
 export const SESSION_COOKIE = "forma_session";
 

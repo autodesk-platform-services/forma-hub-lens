@@ -7,6 +7,7 @@ import { getDb } from "@/lib/db";
 import { SetupRequired, SignInRequired } from "@/components/Gate";
 import {
   AddMembersPanel,
+  ArchiveProjectsPanel,
   CreateProjectsPanel,
   RemoveMembersPanel,
   Tabs,
@@ -24,6 +25,7 @@ export default async function ManagePage() {
   if (!session) return <SignInRequired />;
 
   const projects = cachedProjects().map((p) => ({ id: p.id, name: p.name, status: p.status }));
+  const activeCount = projects.filter((p) => p.status === "active").length;
 
   let companies: Company[] = [];
   let companyError: string | null = null;
@@ -78,6 +80,11 @@ export default async function ManagePage() {
               id: "projects",
               label: "Create projects",
               content: <CreateProjectsPanel projectTypes={PROJECT_TYPES} />,
+            },
+            {
+              id: "archive",
+              label: `Archive projects (${activeCount})`,
+              content: <ArchiveProjectsPanel projects={projects} />,
             },
             {
               id: "companies",
