@@ -1,19 +1,30 @@
 # Render Blueprint for Forma Hub Lens.
 #
 # In Render: New > Blueprint, point it at this repo, and it reads this file.
+# (Blueprints themselves cost nothing — they just create the services below.)
 #
-# Two things about this service are deliberate and shouldn't be "optimised" away:
+# ---------------------------------------------------------------------------
+# This is configured for Render's FREE instance type, which means the cache is
+# TEMPORARY. Understand this before relying on it:
 #
-#   1. It needs the persistent disk. The whole cache — sessions, the uploaded
-#      Data Connector extract, the activity rows — is one SQLite file under
-#      /data. No disk means sign-in fails on the first click, because the OAuth
-#      state is written there before any cookie exists.
+#   * Free instances get no persistent disk. Render: files are "lost every time
+#     the service redeploys, restarts, or spins down."
+#   * A free service spins down after 15 minutes without traffic, and takes
+#     about a minute to wake up again.
 #
-#   2. It must stay on a single instance. SQLite is a single-writer file, and a
-#      Render disk attaches to one instance anyway. Do not add autoscaling.
+# So sessions, the uploaded Data Connector extract and the activity cache all
+# reset on any restart or idle period. The app works — the filesystem is
+# writable, unlike a serverless host — it just forgets. EPHEMERAL_STORAGE below
+# makes the UI say so instead of leaving people guessing.
 #
-# Persistent disks require a paid instance type; Render's free tier has no disk
-# and spins the service down when idle, which would wipe every session.
+# Recovery after a wipe: sign in again, then re-ingest a completed job from the
+# Extracts tab. That re-downloads from Autodesk and spends none of the hub's
+# 24-jobs-per-24-hours quota.
+#
+# TO MAKE THE DATA STICK: set `plan: starter` and restore the disk block that is
+# commented out below. Persistent disks are paid-only, and a service with a disk
+# can't scale past one instance (which suits SQLite anyway).
+# ---------------------------------------------------------------------------
 
 services:
   - type: web
@@ -21,23 +32,30 @@ services:
     runtime: docker
     dockerfilePath: ./Dockerfile
     dockerContext: .
-    plan: starter
+    plan: free
     region: oregon
     branch: main
     autoDeploy: true
 
-    # Returns 503 until the config is complete and the disk is writable, so a
-    # misconfigured deploy is caught here instead of failing later at sign-in.
+    # Returns 503 until the config is complete and the cache directory is
+    # writable, so a misconfigured deploy is caught here rather than at sign-in.
     healthCheckPath: /api/health
 
-    disk:
-      name: forma-hub-lens-data
-      mountPath: /data
-      sizeGB: 5 # ~100 MB per full hub extract; room for several plus growth
+    # Uncomment together with `plan: starter` to make data survive restarts.
+    # disk:
+    #   name: forma-hub-lens-data
+    #   mountPath: /data
+    #   sizeGB: 5   # ~100 MB per full hub extract
 
     envVars:
+      # /data is created and made writable in the Dockerfile, so this works with
+      # or without a disk mounted there. Without one it is simply temporary.
       - key: DATA_DIR
         value: /data
+      # Drives the "Temporary storage" banner. Remove or set false once a
+      # persistent disk is attached.
+      - key: EPHEMERAL_STORAGE
+        value: "true"
       - key: NODE_ENV
         value: production
       - key: PORT

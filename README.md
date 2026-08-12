@@ -393,10 +393,21 @@ The repo ships a Blueprint, so Render does the wiring:
 4. Deploy. `/api/health` gates it — a 503 there means config is incomplete or the
    disk isn't mounted, which is what you want to find out at deploy time.
 
-The Blueprint pins a **paid instance type on purpose**: persistent disks aren't
-available on Render's free tier, and the free tier idles the service down, which
-would wipe every session and the uploaded extract. It also stays on a single
-instance — SQLite is single-writer and a Render disk attaches to one instance.
+**The Blueprint is set to Render's free instance type, so storage is temporary.**
+Free instances get no persistent disk — Render's docs: files are "lost every time
+the service redeploys, restarts, or spins down" — and a free service sleeps after
+15 minutes idle, waking in about a minute. Sessions, the uploaded extract and the
+activity cache all reset on any restart or idle period.
+
+The app still runs: unlike a serverless host the filesystem is writable, so
+sign-in and uploads work. `EPHEMERAL_STORAGE=true` shows a banner saying so, so
+the reset reads as expected rather than as a fault. To recover after a wipe, sign
+in and re-ingest a completed job from **Extracts** — that re-downloads from
+Autodesk and spends none of the hub's 24-jobs-per-24-hours quota.
+
+**To make data stick**, set `plan: starter` in `render.yaml` and uncomment the
+`disk` block (~$7/mo instance plus ~$1.25/mo for 5 GB). A service with a disk
+can't scale past one instance, which suits SQLite anyway.
 
 ### Running it anywhere else
 

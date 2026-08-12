@@ -4,6 +4,7 @@ import Link from "next/link";
 import "./globals.css";
 import { getSession } from "@/lib/aps/auth";
 import { configProblems } from "@/lib/env";
+import { StorageWarning } from "@/components/StorageWarning";
 import { signOut } from "./actions";
 
 export const metadata: Metadata = {
@@ -98,6 +99,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             </div>
           </div>
         </header>
+
+        <StorageWarning />
 
         <main className="mx-auto w-full max-w-[1500px] flex-1 px-6 py-6">{children}</main>
 

@@ -32,6 +32,16 @@ export const env = {
   get dataDir() {
     return process.env.DATA_DIR?.trim() || ".data";
   },
+  /**
+   * Set on deployments with no persistent disk (e.g. a Render free instance),
+   * where the cache is wiped on every restart, redeploy or idle spin-down.
+   * Purely cosmetic — it drives a warning banner so the data loss is expected
+   * rather than mysterious.
+   */
+  get ephemeralStorage() {
+    const value = process.env.EPHEMERAL_STORAGE?.trim().toLowerCase();
+    return value === "true" || value === "1";
+  },
 };
 
 /** Reports config problems without throwing, so the UI can show a setup screen. */
