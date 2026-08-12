@@ -16,7 +16,7 @@ process.env.DATA_DIR = workdir;
 process.env.APS_CLIENT_ID = "test";
 process.env.APS_CLIENT_SECRET = "test";
 process.env.APS_CALLBACK_URL = "http://localhost:3000/api/aps/callback";
-process.env.FORMA_HUB_ID = "31bbf700-27f1-47cc-b30c-2e8048443ee8";
+process.env.FORMA_HUB_ID = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
 
 const { verifyHubAccess } = await import("../src/lib/aps/authorization.ts");
 
@@ -37,7 +37,7 @@ test("admits an account whose hub list contains this hub", async () => {
   mockHubs({
     data: [
       { id: "b.99999999-0000-0000-0000-000000000000", attributes: { name: "Other Hub" } },
-      { id: "b.31bbf700-27f1-47cc-b30c-2e8048443ee8", attributes: { name: "Our Hub" } },
+      { id: "b.aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", attributes: { name: "Our Hub" } },
     ],
   });
   const result = await verifyHubAccess("token");
@@ -46,12 +46,12 @@ test("admits an account whose hub list contains this hub", async () => {
 });
 
 test("accepts the id with or without the Data Management 'b.' prefix", async () => {
-  mockHubs({ data: [{ id: "31bbf700-27f1-47cc-b30c-2e8048443ee8", attributes: {} }] });
+  mockHubs({ data: [{ id: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", attributes: {} }] });
   assert.equal((await verifyHubAccess("token")).ok, true);
 });
 
 test("is case-insensitive on the hub id", async () => {
-  mockHubs({ data: [{ id: "B.31BBF700-27F1-47CC-B30C-2E8048443EE8", attributes: {} }] });
+  mockHubs({ data: [{ id: "B.AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE", attributes: {} }] });
   assert.equal((await verifyHubAccess("token")).ok, true);
 });
 
@@ -96,6 +96,6 @@ test("fails closed on an unreadable response body", async () => {
 });
 
 test("does not match on a hub id that merely contains ours as a substring", async () => {
-  mockHubs({ data: [{ id: "b.31bbf700-27f1-47cc-b30c-2e8048443ee8-extra", attributes: {} }] });
+  mockHubs({ data: [{ id: "b.aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee-extra", attributes: {} }] });
   assert.equal((await verifyHubAccess("token")).ok, false);
 });

@@ -17,7 +17,7 @@ process.env.DATA_DIR = workdir;
 process.env.APS_CLIENT_ID = "test";
 process.env.APS_CLIENT_SECRET = "test";
 process.env.APS_CALLBACK_URL = "http://localhost:3000/api/aps/callback";
-process.env.FORMA_HUB_ID = "31bbf700-27f1-47cc-b30c-2e8048443ee8";
+process.env.FORMA_HUB_ID = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
 
 const { requireAccountAdmin, setProjectStatus, fetchProjectStatus, NotAccountAdminError } =
   await import("../src/lib/aps/hubAdmin.ts");

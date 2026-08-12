@@ -27,7 +27,7 @@ function csv(rows: Array<Record<string, string | number>>): string {
   return [header.join(","), ...rows.map((row) => header.map((h) => cell(row[h])).join(","))].join("\n");
 }
 
-const ACCOUNT = "31bbf700-27f1-47cc-b30c-2e8048443ee8";
+const ACCOUNT = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
 const iso = (daysAgo: number) =>
   new Date(Date.now() - daysAgo * 86_400_000).toISOString().replace("T", " ").slice(0, 19);
 
