@@ -1,0 +1,61 @@
+# Render Blueprint for Forma Hub Lens.
+#
+# In Render: New > Blueprint, point it at this repo, and it reads this file.
+#
+# Two things about this service are deliberate and shouldn't be "optimised" away:
+#
+#   1. It needs the persistent disk. The whole cache — sessions, the uploaded
+#      Data Connector extract, the activity rows — is one SQLite file under
+#      /data. No disk means sign-in fails on the first click, because the OAuth
+#      state is written there before any cookie exists.
+#
+#   2. It must stay on a single instance. SQLite is a single-writer file, and a
+#      Render disk attaches to one instance anyway. Do not add autoscaling.
+#
+# Persistent disks require a paid instance type; Render's free tier has no disk
+# and spins the service down when idle, which would wipe every session.
+
+services:
+  - type: web
+    name: forma-hub-lens
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: starter
+    region: oregon
+    branch: main
+    autoDeploy: true
+
+    # Returns 503 until the config is complete and the disk is writable, so a
+    # misconfigured deploy is caught here instead of failing later at sign-in.
+    healthCheckPath: /api/health
+
+    disk:
+      name: forma-hub-lens-data
+      mountPath: /data
+      sizeGB: 5 # ~100 MB per full hub extract; room for several plus growth
+
+    envVars:
+      - key: DATA_DIR
+        value: /data
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000
+
+      # sync: false keeps these out of the repo — set them in the Render
+      # dashboard (Environment tab) when you create the service.
+      - key: APS_CLIENT_ID
+        sync: false
+      - key: APS_CLIENT_SECRET
+        sync: false
+      # Must be https://<your-render-host>/api/aps/callback and must also be
+      # registered as a callback URL on the APS app, or sign-in returns
+      # "invalid redirect_uri". The session cookie's Secure flag keys off this.
+      - key: APS_CALLBACK_URL
+        sync: false
+      - key: FORMA_HUB_ID
+        sync: false
+      # Optional: US | EMEA | AUS. Leave unset to let Autodesk route.
+      - key: FORMA_REGION
+        sync: false

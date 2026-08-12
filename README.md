@@ -380,7 +380,25 @@ Connector quota is 24 jobs per hub per 24 hours, shared), add a named-user check
 4. **Re-consent.** Existing sessions predate the `account:write` scope; sign out and back in or the
    Manage writes return 403.
 
-### Running it
+### Running it on Render
+
+The repo ships a Blueprint, so Render does the wiring:
+
+1. **New > Blueprint** in Render, point it at this repo. It reads `render.yaml`.
+2. Set the four secrets in the **Environment** tab when prompted:
+   `APS_CLIENT_ID`, `APS_CLIENT_SECRET`, `APS_CALLBACK_URL`, `FORMA_HUB_ID`.
+   `APS_CALLBACK_URL` is `https://<your-render-host>/api/aps/callback`.
+3. Register that same callback URL on the APS app, or sign-in fails with an
+   invalid `redirect_uri`.
+4. Deploy. `/api/health` gates it — a 503 there means config is incomplete or the
+   disk isn't mounted, which is what you want to find out at deploy time.
+
+The Blueprint pins a **paid instance type on purpose**: persistent disks aren't
+available on Render's free tier, and the free tier idles the service down, which
+would wipe every session and the uploaded extract. It also stays on a single
+instance — SQLite is single-writer and a Render disk attaches to one instance.
+
+### Running it anywhere else
 
 ```bash
 docker compose up --build
@@ -396,13 +414,22 @@ writable, 200 otherwise, and exposes no hub data.
 
 ### Choosing a host
 
-**Container or VM with a volume** — ECS/Fargate with EFS, an internal PaaS, a plain VM. Works as
-built.
+**Container or VM with a volume** — Render (a `render.yaml` Blueprint is included), Railway,
+Fly.io, ECS/Fargate with EFS, an internal PaaS, a plain VM. Works as built.
 
-**Serverless (Vercel and similar) will not work unchanged.** The filesystem is ephemeral, so
-`node:sqlite` has nowhere to live: uploads fail and the cache evaporates between requests. Going
-that route means moving the dataset, activity cache and session store to a hosted database — the
-largest change on this list.
+**Serverless (Vercel and similar) will not work unchanged.** Tried and confirmed. The filesystem is
+read-only apart from an ephemeral `/tmp`, and this app writes one SQLite file that holds sessions,
+OAuth state, the extract and the activity cache. Concretely:
+
+- Sign-in 500s on the first click: `buildAuthorizeUrl()` hits the database before any cookie
+  exists, so it tries to create a directory on a read-only volume.
+- `DATA_DIR=/tmp` doesn't rescue it — `/tmp` is per-instance, so the OAuth `state` written by
+  `/api/aps/login` often isn't visible to `/api/aps/callback`, and sign-in fails on the mismatch.
+- Vercel caps request bodies around 4.5 MB; a full hub extract is ~11 MB, so the upload is rejected
+  outright.
+
+Going that route means moving the dataset, activity cache and session store to a hosted database and
+switching the upload to direct-to-blob — the largest change on this list.
 
 **Just sharing the code** is also a legitimate answer. Each person runs it locally with their own
 APS credentials and their own cache; nothing is centrally hosted and there is no shared data to
