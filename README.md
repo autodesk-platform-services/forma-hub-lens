@@ -1,51 +1,128 @@
 # Forma Hub Lens
 
-An internal console for an Autodesk Forma hub, for someone holding **Hub Admin** (or Executive
-Overview) rights. It covers three things:
+![platforms](https://img.shields.io/badge/platform-local%20%7C%20container-lightgray.svg)
+[![node.js](https://img.shields.io/badge/Node.js-22%2B-blue.svg)](https://nodejs.org)
+[![license](https://img.shields.io/:license-mit-green.svg)](https://opensource.org/licenses/MIT)
 
-1. **Tools** — a dashboard per Forma tool, laid out to match Autodesk's Power BI template for that
-   tool, driven by an uploaded Data Connector CSV extract.
-2. **Cross-project activity** — projects, activity explorer and extract management.
-3. **Hub management** — bulk member add/remove, bulk project creation, company and role views.
+Forma Hub Lens is an internal console for an Autodesk Forma hub, intended for someone holding **Hub Admin** (or Executive Overview) rights. It combines hub-level analytics, cross-project activity, extract management, and bulk hub administration in a single application.
+
+> **Gallery requirement:** Add a 16:9 `thumbnail.png` (or `thumbnail.gif`) to the repository root before publishing this as an Autodesk code sample.
+
+![Forma Hub Lens](thumbnail.png)
+
+## Features
+
+- **Tool dashboards** — a dashboard per Forma tool, laid out to match Autodesk's Power BI template for that tool and driven by an uploaded Data Connector CSV extract.
+- **Cross-project activity** — projects, activity explorer, and extract management across the hub.
+- **Hub management** — bulk member add/remove, bulk project creation and archiving, company views, role views, and product-access assignment.
+
+## Table of contents
+
+- [Usage](#usage)
+- [Development](#development)
+- [How it works](#how-it-works)
+- [Deployment](#deployment)
+- [Known limitations](#known-limitations)
+- [Operational considerations](#operational-considerations)
+- [License](#license)
 
 ---
 
-## The one thing to know first
+## Usage
 
-**Forma has no live cross-project activity endpoint.** Activity is only available through the
-**Data Connector API**, which is asynchronous and batch-oriented:
+### Overview
 
-```
-POST a data request  →  Autodesk spawns a job  →  job completes (minutes)  →  extract = CSV files
-```
+The **Overview** page shows hub-wide totals, events per day, busiest projects and people, and which projects have *no* activity in the ingested window.
 
-That shapes the whole tool. The console cannot "just query" activity on page load, so it:
+- `Sync projects` pulls the hub project list from the Admin API.
+- `Refresh jobs` pulls Data Connector job state.
+- The page also shows the running Data Connector extraction count, which matters because Autodesk caps extraction at 24 jobs per hub per 24 hours and 24 per user.
 
-1. submits Data Connector requests for the `activities` service group,
-2. downloads and parses the resulting CSVs once,
-3. caches the normalised rows in a local SQLite file, and
-4. serves every dashboard view from that cache.
+### Projects
 
-**Autodesk caps extraction at 24 jobs per hub per 24 hours** (and 24 per user), so treat each
-extract as expensive. The Overview page shows your running count.
+The **Projects** page shows every project from the Admin API joined against ingested activity, including:
 
-Other limits worth knowing:
+- events,
+- distinct people,
+- last event,
+- services touched,
+- member counts, and
+- sheet counts.
 
-| Limit | Value |
+Click a project to filter **Activity** to that project.
+
+### Activity
+
+The **Activity** page is the event explorer. Filter by date, project, service, action, person, or free text. Free-text search also searches the untouched source row.
+
+`Export CSV` downloads exactly what is on screen, including filters. Every row can be expanded to show the raw extract row.
+
+### Extracts
+
+The **Extracts** page lets you:
+
+- submit a Data Connector data request,
+- watch jobs,
+- ingest completed extracts, and
+- review the column-mapping report after ingestion.
+
+### Tools
+
+The **Tools** page contains 21 Forma tool dashboards. Upload the ZIP of CSVs from **Insight › Data Connector** to populate them.
+
+Each file is loaded under its own name. For example, `admin_projects.csv` becomes the `admin_projects` table. That is how the Power BI templates bind their data (`Csv.Document(File.Contents(SourceFolder & "\\admin_projects.csv"))`), so the same extract that drives the `.pbit` files drives these dashboards.
+
+Selecting a tool opens a near-full-screen dashboard. Use **Esc**, **Close**, **Back to tools**, or click outside the dashboard to return to the menu. A tool is greyed out when its primary CSV is not in the extract.
+
+### Manage
+
+The **Manage** page performs hub-management writes. These operations require `account:write`.
+
+| Operation | Endpoint |
 | --- | --- |
-| Activity history available | last 12 months |
-| Max window per request | 31 days |
-| Activity replication lag | up to ~20 minutes |
-| Signed download URL lifetime | 60 seconds |
-| Projects per request (`projectIdList`) | 50 (omit it for the whole hub) |
+| Bulk add members | `POST construction/admin/v2/projects/:projectId/users:import` (≤200 per call) |
+| Bulk remove members | `DELETE construction/admin/v1/projects/:projectId/users/:userId` |
+| Bulk create projects | `POST construction/admin/v1/accounts/:hub/projects` (≤50 per run) |
+| **Bulk archive projects** | `PATCH hq/v1/accounts/:hub/projects/:id` (≤50 per run) |
+| Companies | `GET construction/admin/v1/accounts/:hub/companies` |
+| Roles | Read from `admin_project_roles.csv` in the extract |
+
+Add and remove operations take a list of projects and a newline-separated member list, so one submission fans out across projects. Removal requires typing `REMOVE` to confirm.
+
+There is **no hub-wide "list roles" endpoint** in the Forma Admin API, so the Roles view reads `admin_project_roles.csv` from the uploaded extract.
+
+### Typical workflow
+
+1. Go to **Extracts** → pick a window → check `activities` → **Submit data request**.
+2. Wait for the Data Connector job to complete, then use **Refresh jobs** until the job reads `complete`.
+3. Select **Ingest**. The rows land in the cache and every other page fills in.
+
+Ingesting overlapping windows is safe. Rows are de-duplicated by fingerprint, so you can re-ingest without creating duplicates.
 
 ---
 
-## Setup
+## Development
+
+### Prerequisites
+
+Before running the sample locally, you need:
+
+- Node.js 22 or later,
+- npm,
+- an Autodesk Platform Services application configured as a **Traditional Web App**,
+- access to an Autodesk Forma hub,
+- a Forma account with **Hub Admin** or **Executive Overview** rights, and
+- APS application credentials.
+
+Storage uses the Node 22+ built-in `node:sqlite`, so there is no native dependency to compile.
+
+### Install dependencies
 
 ```bash
 npm install
 ```
+
+### Environment variables
 
 Copy `.env.example` to `.env.local` and fill it in. `.env.local` is gitignored — keep it that way.
 
@@ -54,10 +131,27 @@ Copy `.env.example` to `.env.local` and fill it in. `.env.local` is gitignored �
 | `APS_CLIENT_ID` / `APS_CLIENT_SECRET` | From <https://aps.autodesk.com/myapps>. The app must be a **Traditional Web App**. |
 | `APS_CALLBACK_URL` | Must exactly match a callback registered on the APS app. Default `http://localhost:3000/api/aps/callback`. |
 | `FORMA_HUB_ID` | Hub ID **without** the `b.` prefix that the Data Management API uses. |
-| `FORMA_REGION` | Optional: `US`, `EMEA` or `AUS`. Blank lets Autodesk route automatically. |
+| `FORMA_REGION` | Optional: `US`, `EMEA`, or `AUS`. Blank lets Autodesk route automatically. |
 | `DATA_DIR` | Where the local cache lives. Default `.data`. |
 
-Then:
+### Authentication and required scopes
+
+Data Connector requires a **user-context** token. A two-legged client-credentials token will not work for Data Connector because Autodesk scopes the extract to the signed-in user's hub permissions.
+
+Sign in with an account that actually holds Hub Admin or Executive Overview. Otherwise, you will silently get only the projects you are a member of rather than the whole hub.
+
+Scopes requested:
+
+- `data:read`
+- `data:create`
+- `account:read`
+- `account:write`
+- `user-profile:read`
+- `openid`
+
+> `account:write` backs the Hub management writes. If you signed in before that scope was added, **sign out and back in** or the bulk operations will return 403.
+
+### Run locally
 
 ```bash
 npm run dev
@@ -65,89 +159,65 @@ npm run dev
 
 Open <http://localhost:3000> and sign in.
 
-### Why you must sign in (3-legged, not 2-legged)
+### Tests and validation
 
-Data Connector requires a **user context** token. A two-legged client-credentials token will not
-work, because Autodesk scopes the extract to the signed-in user's hub permissions. Sign in with an
-account that actually holds Hub Admin or Executive Overview — otherwise you will silently get only
-the projects you are a member of, not the hub.
+```bash
+npm test                 # 43 tests: CSV reader, column mapper, all 21 dashboards, hub gate, archive guards
+npm run typecheck
+npm run build
+npm run sample-extract   # writes sample-extract.zip — a synthetic extract for trying the Tools tab
+```
 
-Scopes requested: `data:read`, `data:create`, `account:read`, `account:write`, `user-profile:read`,
-`openid`.
-
-> `account:write` backs the Hub management writes. If you signed in before that scope was added,
-> **sign out and back in** or the bulk operations will return 403.
+`npm run test:dashboards` builds a synthetic extract with the real CSV and column names, ingests it, then asserts that every KPI and every chart on all 21 dashboards resolves and returns rows.
 
 ---
 
-## Using it
+## How it works
 
-**Overview** — hub-wide totals, events per day, busiest projects and people, and which projects
-have *no* activity in the ingested window. `Sync projects` pulls the hub project list from the
-Admin API; `Refresh jobs` pulls Data Connector job state.
+### Data Connector architecture
 
-**Projects** — every project from the Admin API joined against ingested activity: events, distinct
-people, last event, services touched, member and sheet counts. Click a project to filter Activity
-to it.
+**Forma has no live cross-project activity endpoint.** Activity is only available through the **Data Connector API**, which is asynchronous and batch-oriented:
 
-**Activity** — the event explorer. Filter by date, project, service, action, person or free text
-(free text also searches the untouched source row). `Export CSV` downloads exactly what is on
-screen, filters included. Every row can be expanded to show the raw extract row.
+```text
+POST a data request  →  Autodesk spawns a job  →  job completes (minutes)  →  extract = CSV files
+```
 
-**Extracts** — submit a data request, watch jobs, and ingest completed extracts. Also shows the
-column mapping report (see below).
+That shapes the whole tool. The console cannot simply query activity on page load, so it:
 
-**Tools** — the 21 Forma tool dashboards. See below.
+1. submits Data Connector requests for the `activities` service group,
+2. downloads and parses the resulting CSVs once,
+3. caches the normalised rows in a local SQLite file, and
+4. serves every dashboard view from that cache.
 
-**Manage** — hub management writes. See below.
+Autodesk caps extraction at **24 jobs per hub per 24 hours** and **24 per user**, so treat each extract as expensive. The Overview page shows your running count.
 
-### The normal loop
+Other limits worth knowing:
 
-1. **Extracts** → pick a window → check `activities` → *Submit data request*.
-2. Wait a few minutes. → *Refresh jobs* until the job reads `complete`.
-3. → *Ingest*. The rows land in the cache and every other page fills in.
+| Limit | Value |
+| --- | --- |
+| Activity history available | Last 12 months |
+| Max window per request | 31 days |
+| Activity replication lag | Up to ~20 minutes |
+| Signed download URL lifetime | 60 seconds |
+| Projects per request (`projectIdList`) | 50; omit it for the whole hub |
 
-Ingesting overlapping windows is safe — rows are de-duplicated by fingerprint, so you can re-ingest
-without creating duplicates.
+### Activity data schema
 
----
+Autodesk versions the activity CSV schemas independently per service, and the authoritative column list ships as a `README.html` *inside each extract* rather than in the public docs.
 
-## How activity CSVs are interpreted
+Rather than hard-code a schema that may not match your hub, the ingester maps whatever columns arrive onto a small canonical shape:
 
-Autodesk versions the activity CSV schemas independently per service, and the authoritative column
-list ships as a `README.html` *inside each extract* rather than in the public docs. Rather than
-hard-code a schema that may not match your hub, the ingester maps whatever columns arrive onto a
-small canonical shape:
+`occurred_at`, `project_id`, `actor_id`, `actor_name`, `actor_email`, `service`, `action`, `target_type`, `target_name`
 
-`occurred_at`, `project_id`, `actor_id`, `actor_name`, `actor_email`, `service`, `action`,
-`target_type`, `target_name`
+The full untouched row is always stored as JSON alongside, so nothing is lost and free-text search still reaches unmapped columns.
 
-The full untouched row is always stored as JSON alongside, so nothing is lost and free-text search
-still reaches unmapped columns.
+**Check the "Column mapping" panel on the Extracts page after your first ingest.** It lists every column in your extract and what it was mapped to. If something important shows as `unmapped`, or is mapped to the wrong field, add the column name to `COLUMN_CANDIDATES` in [`src/lib/activitySchema.ts`](src/lib/activitySchema.ts) and re-ingest. That table is the single place schema guesses live.
 
-**Check the "Column mapping" panel on the Extracts page after your first ingest.** It lists every
-column in your extract and what it was mapped to. If something important shows as `unmapped`, or is
-mapped to the wrong field, add the column name to `COLUMN_CANDIDATES` in
-[`src/lib/activitySchema.ts`](src/lib/activitySchema.ts) and re-ingest. That table is the single
-place schema guesses live.
+Only files matching `activities*.csv` are ingested. Other service groups still land in the extract and are recorded in `extract_files`, but they do not feed the activity views.
 
-Only files matching `activities*.csv` are ingested. Other service groups still land in the extract
-and are recorded in `extract_files`, but they don't feed the activity views.
+### Tool dashboards
 
----
-
-## Tools tab — the 21 dashboards
-
-Upload the ZIP of CSVs from **Insight › Data Connector**. Each file is loaded under its own name:
-`admin_projects.csv` becomes the `admin_projects` table. That is exactly how the Power BI templates
-bind their data (`Csv.Document(File.Contents(SourceFolder & "\admin_projects.csv"))`), so the same
-extract that drives the .pbit files drives these dashboards.
-
-Selecting a tool opens a near-full-screen dashboard; **Esc**, **Close**, **Back to tools** or a
-click outside returns to the menu. A tool is greyed out when its primary CSV isn't in the extract.
-
-Each dashboard is distilled from the matching Autodesk template — KPI cards, chart types, titles and
-groupings are taken from that template's hub page:
+Each dashboard is distilled from the matching Autodesk Power BI template. KPI cards, chart types, titles, and groupings are taken from that template's hub page.
 
 | Tool | Template |
 | --- | --- |
@@ -173,79 +243,47 @@ groupings are taken from that template's hub page:
 | Submittals | `data-connector-submittals-dashboard-connector-v3-4.pbit` |
 | Takeoff | `data-connector-takeoff-dashboard-csv-v1-1.pbit` |
 
-### What these dashboards are, and are not
+#### Dashboard scope and limitations
 
-They reproduce each template's **hub-level page** — its KPI row and its main visuals — not all of
-its pages or all ~1,000 visuals across the set. Where a template's field is a Power BI *computed*
-column (`Activity Status`, `Category Name`, `Is Delayed Finish`) rather than a real CSV column, the
-spec uses the closest raw equivalent, because those columns exist only inside the .pbit.
+The dashboards reproduce each template's **hub-level page** — its KPI row and main visuals — rather than all pages or all ~1,000 visuals across the set.
 
-Every spec lives in [`src/lib/dashboards/specs.ts`](src/lib/dashboards/specs.ts) as plain data —
-add a KPI or chart by adding an object, no rendering code required. Panels whose table or column is
-missing say so on the card instead of rendering a misleading zero.
+Where a template's field is a Power BI *computed* column (`Activity Status`, `Category Name`, `Is Delayed Finish`) rather than a real CSV column, the spec uses the closest raw equivalent because those columns exist only inside the `.pbit`.
 
-Facts join to dimensions on `bim360_project_id → admin_projects.id`, `company_id →
-admin_companies.id`, `created_by → admin_users.autodesk_id` and a few tool-specific keys; the table
-is in [`src/lib/dashboards/engine.ts`](src/lib/dashboards/engine.ts).
+Every spec lives in [`src/lib/dashboards/specs.ts`](src/lib/dashboards/specs.ts) as plain data. Add a KPI or chart by adding an object; no rendering code is required. Panels whose table or column is missing say so on the card instead of rendering a misleading zero.
 
----
+Facts join to dimensions on `bim360_project_id → admin_projects.id`, `company_id → admin_companies.id`, `created_by → admin_users.autodesk_id`, and a few tool-specific keys. The join logic is in [`src/lib/dashboards/engine.ts`](src/lib/dashboards/engine.ts).
 
-## Manage tab — hub management
+### Hub management
 
-All of these write to the live hub and need `account:write`.
+All hub-management operations write to the live hub and need `account:write`.
 
-| Operation | Endpoint |
-| --- | --- |
-| Bulk add members | `POST construction/admin/v2/projects/:projectId/users:import` (≤200 per call) |
-| Bulk remove members | `DELETE construction/admin/v1/projects/:projectId/users/:userId` |
-| Bulk create projects | `POST construction/admin/v1/accounts/:hub/projects` (≤50 per run) |
-| **Bulk archive projects** | `PATCH hq/v1/accounts/:hub/projects/:id` — see below (≤50 per run) |
-| Companies | `GET construction/admin/v1/accounts/:hub/companies` |
-| Roles | read from `admin_project_roles.csv` in the extract |
+#### Archiving projects
 
-Add and remove take a list of projects and a newline-separated member list, so one submission fans
-out across projects. Removal requires typing `REMOVE` to confirm.
+Archive moves a project from **Active** to **Archived**. Nothing is deleted: the project keeps all its data and members, drops off users' active project lists, and can be set back to active.
 
-There is **no hub-wide "list roles" endpoint** in the Forma Admin API, so the Roles view reads
-`admin_project_roles.csv` from the uploaded extract.
+This operation is unusual:
 
-### Archiving projects
+- The **Forma Hub Admin API has no project update endpoint** at all; the only PATCH on a project is `/image`. Archiving therefore goes through the older BIM 360 Account Admin endpoint, `PATCH hq/v1/accounts/:hub/projects/:id`, with a body of exactly `{"status":"archived"}`.
+- Autodesk's [Forma compatibility table](https://aps.autodesk.com/en/docs/acc/v1/overview/bim360-compatibility/compatibility-table/) marks that endpoint **"No"** for Forma projects. The original implementation notes state that this is out of date and that the endpoint was verified against a live Forma-platform (`acc`) project on this hub: archive returned 200, the status changed, the Forma Admin API reflected it, and restoring to active worked the same way. If Autodesk ships a native Hub Admin equivalent, switch to it.
+- The endpoint is **app-only**, so it needs a two-legged token. This is the one place in the app that does not act as the signed-in user, which means Autodesk is not checking that person's permissions for this endpoint.
 
-Archive moves a project from **Active** to **Archived**. Nothing is deleted — the project keeps all
-its data and members, it drops off users' active project lists, and it can be set back to active.
+Because of the last point, the archive action calls `requireAccountAdmin()` first. It looks the signed-in user up in the hub directory and requires `access_level === "account_admin"`. It fails closed: if the lookup errors, access is denied. Hub membership alone is not enough here, unlike everywhere else in the tool.
 
-This one is unusual, so it's worth knowing why:
+Additional guards:
 
-- The **Forma Hub Admin API has no project update endpoint** at all; the only PATCH on a project is
-  `/image`. So archiving goes through the older BIM 360 Account Admin endpoint,
-  `PATCH hq/v1/accounts/:hub/projects/:id`, with a body of exactly `{"status":"archived"}`.
-- Autodesk's [Forma compatibility table](https://aps.autodesk.com/en/docs/acc/v1/overview/bim360-compatibility/compatibility-table/)
-  marks that endpoint **"No"** for Forma projects. **That is out of date.** Verified against a live
-  Forma-platform (`acc`) project on this hub: archive returned 200, the status changed, the Forma
-  Admin API reflected it, and restoring to active worked the same way. If Autodesk ships a native
-  Hub Admin equivalent, switch to it.
-- The endpoint is **app-only**, so it needs a two-legged token. That is the one place in this app
-  that doesn't act as the signed-in user, which means Autodesk is *not* checking that person's
-  permissions.
+- only projects currently **active** are offered,
+- each project's live status is re-read immediately before writing,
+- anything already archived or suspended is skipped rather than overwritten,
+- the user must type `ARCHIVE` to confirm, and
+- a run is capped at 50 projects.
 
-Because of that last point, the archive action calls `requireAccountAdmin()` first: it looks the
-signed-in user up in the hub directory and requires `access_level === "account_admin"`. It fails
-closed — if the lookup errors, access is denied. Hub membership alone is not enough here, unlike
-everywhere else in the tool.
+There is no un-archive action in the UI. Restoring is the same one-field change in reverse (`{"status":"active"}`) and can be done in Forma or added to this app.
 
-Other guards: only projects currently **active** are offered; each project's live status is
-re-read immediately before writing, so anything already archived (or suspended) is skipped rather
-than overwritten; you must type `ARCHIVE` to confirm; and a run is capped at 50 projects.
+#### Product access mapping
 
-There is no un-archive in the UI. Restoring is the same one-field change in reverse
-(`{"status":"active"}`) and can be done in Forma, or ask and it's a small addition here.
+The **Choose product access…** options are commercial bundle names; the Admin API takes product *keys*.
 
-### Product access mapping
-
-The **Choose product access…** options are commercial bundle names; the Admin API takes product
-*keys*. This mapping is the console's interpretation — **verify it against your hub's entitlements
-before a large import** and edit `PRODUCT_ACCESS_OPTIONS` in
-[`src/lib/aps/hubAdmin.ts`](src/lib/aps/hubAdmin.ts) if your account provisions a bundle differently:
+This mapping is the console's interpretation. **Verify it against your hub's entitlements before a large import** and edit `PRODUCT_ACCESS_OPTIONS` in [`src/lib/aps/hubAdmin.ts`](src/lib/aps/hubAdmin.ts) if your account provisions a bundle differently.
 
 | Option | Product keys |
 | --- | --- |
@@ -256,55 +294,39 @@ before a large import** and edit `PRODUCT_ACCESS_OPTIONS` in
 | Forma Build | `build` |
 | Forma Design Collaboration | `designCollaboration` |
 
----
+### Project structure
 
-## Layout
-
-```
+```text
 src/
   app/
-    page.tsx              Overview
-    projects/             Cross-project rollup
-    activity/             Event explorer
-    extracts/             Data Connector requests, jobs, ingest
-    tools/                21 tool dashboards + extract upload
-    manage/               Bulk member / project operations
-    actions.ts            Server actions (sync, request, ingest)
-    api/aps/login|callback   OAuth 3-legged flow
-    api/activity/export      Filtered CSV download
-    api/dataset/upload       Extract ZIP ingestion
-    api/dashboards/[id]      Computes one dashboard on demand
+    page.tsx                Overview
+    projects/               Cross-project rollup
+    activity/               Event explorer
+    extracts/               Data Connector requests, jobs, ingest
+    tools/                  21 tool dashboards + extract upload
+    manage/                 Bulk member / project operations
+    actions.ts              Server actions (sync, request, ingest)
+    api/aps/login|callback  OAuth 3-legged flow
+    api/activity/export     Filtered CSV download
+    api/dataset/upload      Extract ZIP ingestion
+    api/dashboards/[id]     Computes one dashboard on demand
   lib/
-    dashboards/specs.ts   The 21 dashboard definitions  ← add KPIs/charts here
-    dashboards/engine.ts  Spec -> SQL, join rules
-    dataset.ts            Extract ZIP -> one SQLite table per CSV
-    aps/hubAdmin.ts       Bulk member / project writes
-    aps/auth.ts           OAuth, session, token refresh
-    aps/client.ts         Authenticated fetch, retry, pagination
-    aps/admin.ts          Hub Admin API (projects)
-    aps/dataConnector.ts  Data Connector API
-    activitySchema.ts     Column mapping heuristics  ← tune schema guesses here
-    csv.ts                Streaming RFC-4180 reader
-    ingest.ts             Extract → cache
-    queries.ts            Dashboard aggregations
-    db.ts                 SQLite schema
+    dashboards/specs.ts     The 21 dashboard definitions  ← add KPIs/charts here
+    dashboards/engine.ts    Spec -> SQL, join rules
+    dataset.ts              Extract ZIP -> one SQLite table per CSV
+    aps/hubAdmin.ts         Bulk member / project writes
+    aps/auth.ts             OAuth, session, token refresh
+    aps/client.ts           Authenticated fetch, retry, pagination
+    aps/admin.ts            Hub Admin API (projects)
+    aps/dataConnector.ts    Data Connector API
+    activitySchema.ts       Column mapping heuristics  ← tune schema guesses here
+    csv.ts                  Streaming RFC-4180 reader
+    ingest.ts               Extract → cache
+    queries.ts              Dashboard aggregations
+    db.ts                   SQLite schema
 ```
 
-Storage is the Node 22+ built-in `node:sqlite`, so there is no native dependency to compile.
-
-```bash
-npm test              # 43 tests: CSV reader, column mapper, all 21 dashboards, hub gate, archive guards
-npm run typecheck
-npm run build
-npm run sample-extract   # writes sample-extract.zip — a synthetic extract for trying the Tools tab
-```
-
-`npm run test:dashboards` builds a synthetic extract with the real CSV and column names, ingests it,
-then asserts that every KPI and every chart on all 21 dashboards resolves and returns rows.
-
----
-
-## Endpoints used
+### APS endpoints used
 
 | Purpose | Endpoint | Scope |
 | --- | --- | --- |
@@ -322,146 +344,118 @@ then asserts that every KPI and every chart on all 21 dashboards resolves and re
 | Archive project | `PATCH hq/v1/accounts/:hub/projects/:id` | `account:write` (2-legged) |
 | Admin check | `GET hq/v1/accounts/:hub/users/search` | `account:read` (2-legged) |
 
----
+### UI conventions
 
-## UI conventions
+Autodesk brand colours only. Dark surfaces use black backgrounds with white body text and yellow titles; light surfaces are off-white with black text. Blue and Teal carry data, per the rule that Blue is for data/tech rather than a general accent.
 
-Autodesk brand colours only. Dark surfaces use black backgrounds with white body text and yellow
-titles; light surfaces are off-white with black text. Blue and Teal carry data, per the rule that
-Blue is for data/tech rather than a general accent.
+**Yellow `#FFFE00` is the action accent** — buttons, active tabs, selected-state borders, and status dots. Anything sitting on yellow is black text, and every yellow *fill* carries a 1px `#D5D5CB` (`accent6`) border, the same border used on cards, inputs, and tables, so the fills stay defined against both the off-white body and the black header.
 
-**Yellow `#FFFE00` is the action accent** — buttons, active tabs, selected-state borders, status
-dots. Anything sitting on yellow is black text, and every yellow *fill* carries a 1px
-`#D5D5CB` (accent6) border, the same border used on cards, inputs and tables, so the fills stay
-defined against both the off-white body and the black header. Yellow *outlines* (active tab
-underline, selected chips, focus rings) keep their yellow, since a gray border there would erase
-the signal it exists to carry.
+Yellow *outlines* — active tab underline, selected chips, and focus rings — keep their yellow because a gray border there would erase the signal it exists to carry.
 
-This deliberately departs from the brand note that yellow is for dark-slide titles only. Flame
-Orange stays defined in the palette but is unused.
+This deliberately departs from the brand note that yellow is for dark-slide titles only. Flame Orange stays defined in the palette but is unused.
 
-The header mark is `public/autodesk-logo.png` — the white-on-transparent "dark background" variant,
-so it reads on the black header only; don't reuse it on the light surfaces.
+The header mark is `public/autodesk-logo.png` — the white-on-transparent "dark background" variant — so it reads on the black header only. Do not reuse it on light surfaces.
 
-Type is Artifakt Legend for headings and Artifakt Element for body, with Arial as the sole fallback
-and the two never mixed.
+Type is Artifakt Legend for headings and Artifakt Element for body, with Arial as the sole fallback; the two are never mixed.
 
 ---
 
-## Deploying it for other people
+## Deployment
 
-Running this on localhost for yourself and running it for a team are different
-propositions. The difference is **the local cache**.
+Running this on localhost for yourself and running it for a team are different propositions. The difference is **the local cache**.
 
-Everything the app calls with the signed-in user's token — Admin reads, Data Connector, the Manage
-writes — is permission-checked by Autodesk. But the dashboards and activity views are served from
-this app's own SQLite cache, so nothing upstream is checking those. Authentication alone would let
-any Autodesk account read the whole extract.
+Everything the app calls with the signed-in user's token — Admin reads, Data Connector, and Manage writes — is permission-checked by Autodesk. But the dashboards and activity views are served from this app's own SQLite cache, so nothing upstream is checking those cached reads.
 
-So access is gated on **hub membership**: at sign-in, and every 30 minutes thereafter, the app asks
-Data Management which hubs the account can reach (`GET /project/v1/hubs`) and requires
-`FORMA_HUB_ID` to be among them. Anyone else gets a 403 that explains why. The check fails closed —
-a network error or a 5xx from Autodesk denies access rather than allowing it — and re-running it on
-a timer means someone removed from the hub loses access without anyone having to remember to
-revoke it. See [`src/lib/aps/authorization.ts`](src/lib/aps/authorization.ts).
+For shared deployment, access is gated on **hub membership**. At sign-in, and every 30 minutes thereafter, the app asks Data Management which hubs the account can reach (`GET /project/v1/hubs`) and requires `FORMA_HUB_ID` to be among them. Anyone else gets a 403 explaining why.
 
-If you need this tighter (say, extract submission limited to a few people because the Data
-Connector quota is 24 jobs per hub per 24 hours, shared), add a named-user check on top.
+The check fails closed: a network error or 5xx from Autodesk denies access rather than allowing it. Re-running the check on a timer means someone removed from the hub loses access without anyone having to remember to revoke it. See [`src/lib/aps/authorization.ts`](src/lib/aps/authorization.ts).
 
-### Before the first deploy
+If you need tighter controls — for example, limiting extract submission to a few people because the Data Connector quota of 24 jobs per hub per 24 hours is shared — add a named-user check on top.
 
-1. **Rotate the client secret** if it has ever been pasted into a chat, ticket or doc, and set the
-   new one only in your platform's secret store.
-2. **Register the deployment's callback URL** on the APS app — `https://your-host/api/aps/callback`
-   — and set `APS_CALLBACK_URL` to match exactly. It must be https: the session cookie's `Secure`
-   flag is derived from this value.
-3. **Provision a persistent volume** at `/data`. Without one the uploaded extract, activity cache
-   and all sessions vanish on restart.
-4. **Re-consent.** Existing sessions predate the `account:write` scope; sign out and back in or the
-   Manage writes return 403.
+### Before the first deployment
 
-### Running it on Render
+1. **Rotate the client secret** if it has ever been pasted into a chat, ticket, or document, and set the new one only in your platform's secret store.
+2. **Register the deployment's callback URL** on the APS app — `https://your-host/api/aps/callback` — and set `APS_CALLBACK_URL` to match exactly. It must use HTTPS because the session cookie's `Secure` flag is derived from this value.
+3. **Provision a persistent volume** at `/data`. Without one, the uploaded extract, activity cache, and all sessions vanish on restart.
+4. **Re-consent.** Existing sessions may predate the `account:write` scope. Sign out and back in or Manage writes return 403.
 
-The repo ships a Blueprint, so Render does the wiring:
+### Render
 
-1. **New > Blueprint** in Render, point it at this repo. It reads `render.yaml`.
-2. Set the four secrets in the **Environment** tab when prompted:
-   `APS_CLIENT_ID`, `APS_CLIENT_SECRET`, `APS_CALLBACK_URL`, `FORMA_HUB_ID`.
-   `APS_CALLBACK_URL` is `https://<your-render-host>/api/aps/callback`.
-3. Register that same callback URL on the APS app, or sign-in fails with an
-   invalid `redirect_uri`.
-4. Deploy. `/api/health` gates it — a 503 there means config is incomplete or the
-   disk isn't mounted, which is what you want to find out at deploy time.
+The repository ships a Blueprint, so Render does the wiring:
 
-**The Blueprint is set to Render's free instance type, so storage is temporary.**
-Free instances get no persistent disk — Render's docs: files are "lost every time
-the service redeploys, restarts, or spins down" — and a free service sleeps after
-15 minutes idle, waking in about a minute. Sessions, the uploaded extract and the
-activity cache all reset on any restart or idle period.
+1. Select **New > Blueprint** in Render and point it at this repository. Render reads `render.yaml`.
+2. Set the four secrets in the **Environment** tab when prompted: `APS_CLIENT_ID`, `APS_CLIENT_SECRET`, `APS_CALLBACK_URL`, and `FORMA_HUB_ID`. `APS_CALLBACK_URL` should be `https://<your-render-host>/api/aps/callback`.
+3. Register that same callback URL on the APS app or sign-in fails with an invalid `redirect_uri`.
+4. Deploy. `/api/health` gates it. A 503 there means configuration is incomplete or the disk is not mounted, which is what you want to find out at deploy time.
 
-The app still runs: unlike a serverless host the filesystem is writable, so
-sign-in and uploads work. `EPHEMERAL_STORAGE=true` shows a banner saying so, so
-the reset reads as expected rather than as a fault. To recover after a wipe, sign
-in and re-ingest a completed job from **Extracts** — that re-downloads from
-Autodesk and spends none of the hub's 24-jobs-per-24-hours quota.
+**The Blueprint is set to Render's free instance type, so storage is temporary.** Free instances get no persistent disk. The original implementation notes describe files as being lost whenever the service redeploys, restarts, or spins down, and note that a free service sleeps after 15 minutes idle, waking in about a minute. Sessions, the uploaded extract, and the activity cache therefore reset on restart or idle-period reset.
 
-**To make data stick**, set `plan: starter` in `render.yaml` and uncomment the
-`disk` block (~$7/mo instance plus ~$1.25/mo for 5 GB). A service with a disk
-can't scale past one instance, which suits SQLite anyway.
+The app still runs because, unlike a serverless host, the filesystem is writable. Sign-in and uploads work. `EPHEMERAL_STORAGE=true` shows a banner explaining the behavior so the reset reads as expected rather than as a fault.
 
-### Running it anywhere else
+To recover after a wipe, sign in and re-ingest a completed job from **Extracts**. That re-downloads from Autodesk and spends none of the hub's 24-jobs-per-24-hours quota.
+
+**To make data stick**, set `plan: starter` in `render.yaml` and uncomment the `disk` block. The original implementation notes estimate approximately $7/month for the instance plus approximately $1.25/month for 5 GB. A service with a disk cannot scale past one instance, which suits SQLite anyway.
+
+### Docker and other hosts
 
 ```bash
 docker compose up --build
 ```
 
 `docker-compose.yml` reads secrets from the host environment rather than baking them into the file.
-The image is a standalone Next.js server on Node 24 — no database server, no native modules.
-Adapt it to whatever platform you use; the only hard requirements are a writable volume at `/data`
-and the four environment variables.
 
-`GET /api/health` is the probe. It returns 503 while config is incomplete or the volume isn't
-writable, 200 otherwise, and exposes no hub data.
+The image is a standalone Next.js server on Node 24 with no database server and no native modules. Adapt it to whatever platform you use; the only hard requirements are a writable volume at `/data` and the four environment variables.
+
+`GET /api/health` is the probe. It returns 503 while configuration is incomplete or the volume is not writable, 200 otherwise, and exposes no hub data.
 
 ### Choosing a host
 
-**Container or VM with a volume** — Render (a `render.yaml` Blueprint is included), Railway,
-Fly.io, ECS/Fargate with EFS, an internal PaaS, a plain VM. Works as built.
+**Container or VM with a volume** — Render (a `render.yaml` Blueprint is included), Railway, Fly.io, ECS/Fargate with EFS, an internal PaaS, or a plain VM all fit the architecture as built.
 
-**Serverless (Vercel and similar) will not work unchanged.** Tried and confirmed. The filesystem is
-read-only apart from an ephemeral `/tmp`, and this app writes one SQLite file that holds sessions,
-OAuth state, the extract and the activity cache. Concretely:
+**Serverless platforms such as Vercel will not work unchanged.** The implementation notes report that this was tried and confirmed. The filesystem is read-only apart from an ephemeral `/tmp`, and this app writes one SQLite file that holds sessions, OAuth state, the extract, and the activity cache.
 
-- Sign-in 500s on the first click: `buildAuthorizeUrl()` hits the database before any cookie
-  exists, so it tries to create a directory on a read-only volume.
-- `DATA_DIR=/tmp` doesn't rescue it — `/tmp` is per-instance, so the OAuth `state` written by
-  `/api/aps/login` often isn't visible to `/api/aps/callback`, and sign-in fails on the mismatch.
-- Vercel caps request bodies around 4.5 MB; a full hub extract is ~11 MB, so the upload is rejected
-  outright.
+Specific failure modes documented in the implementation:
 
-Going that route means moving the dataset, activity cache and session store to a hosted database and
-switching the upload to direct-to-blob — the largest change on this list.
+- Sign-in 500s on the first click because `buildAuthorizeUrl()` hits the database before any cookie exists, so it tries to create a directory on a read-only volume.
+- `DATA_DIR=/tmp` does not rescue it because `/tmp` is per-instance. The OAuth `state` written by `/api/aps/login` often is not visible to `/api/aps/callback`, so sign-in fails on the mismatch.
+- The implementation notes state that Vercel caps request bodies around 4.5 MB while a full hub extract is approximately 11 MB, so the upload is rejected outright.
 
-**Just sharing the code** is also a legitimate answer. Each person runs it locally with their own
-APS credentials and their own cache; nothing is centrally hosted and there is no shared data to
-protect.
+Going the serverless route means moving the dataset, activity cache, and session store to a hosted database and switching the upload to direct-to-blob. That is the largest change on this list.
 
-### Where the data lives
+**Sharing only the code is also a legitimate deployment model.** Each person runs it locally with their own APS credentials and their own cache; nothing is centrally hosted and there is no shared data to protect.
 
-The volume holds real hub data — project names, member emails, activity, cost figures. Host it
-somewhere sanctioned for that, and put the deployment through whatever security and privacy review
-your team normally requires before sharing the URL.
+### Data storage and security
+
+The volume holds real hub data, including project names, member emails, activity, and cost figures. Host it somewhere sanctioned for that data and put the deployment through whatever security and privacy review your team normally requires before sharing the URL.
 
 ---
 
-## Operational notes
+## Known limitations
 
-- **The cache holds real hub data** — the activity cache *and* the uploaded CSV extract. `.data/` is
-  gitignored; treat it as sensitive and delete it when you're done. Deleting it is always safe —
-  re-upload and re-ingest rebuild it.
-- **Uploading an extract replaces the tables it contains** and leaves other tables alone. Mixing two
-  extracts is therefore possible; upload a complete one to keep the picture consistent.
-- **Sessions are server-side.** The cookie is an opaque random id; tokens live in SQLite, never in
-  the browser. Refresh tokens are rotated on use.
-- This is a localhost internal tool with no authorization layer of its own — anyone who can reach
-  the port inherits the signed-in session. Don't expose it beyond localhost without adding auth.
+- **No live cross-project activity endpoint.** Activity depends on asynchronous Data Connector extracts and the local SQLite cache.
+- **Extraction is quota-limited.** Autodesk caps extraction at 24 jobs per hub per 24 hours and 24 per user.
+- **Activity history is limited to the last 12 months**, with a maximum 31-day window per request and replication lag of up to approximately 20 minutes.
+- **Dashboards represent the hub-level page of each Power BI template**, not every page or every visual in the source templates.
+- **Computed Power BI columns are not available in the CSV extracts.** The dashboard specs use the closest raw equivalent where necessary.
+- **There is no hub-wide roles endpoint.** The Roles view depends on `admin_project_roles.csv` from the uploaded extract.
+- **Project archiving uses an older BIM 360 Account Admin endpoint.** The source implementation notes state that it works for the tested Forma hub even though Autodesk's compatibility table marks the endpoint as unsupported for Forma projects.
+- **There is no un-archive action in the UI.** Restoring a project requires the reverse status change in Forma or an additional implementation in this app.
+- **Product access mapping should be verified against the hub's entitlements** before a large import.
+- **Serverless hosting is not supported without architectural changes** because the app depends on writable, persistent SQLite storage and extract uploads.
+
+---
+
+## Operational considerations
+
+- **The cache holds real hub data** — both the activity cache and the uploaded CSV extract. `.data/` is gitignored; treat it as sensitive and delete it when you are done. Deleting it is safe because re-uploading and re-ingesting rebuilds it.
+- **Uploading an extract replaces the tables it contains** and leaves other tables alone. Mixing two extracts is therefore possible; upload a complete one to keep the picture consistent.
+- **Sessions are server-side.** The cookie is an opaque random ID; tokens live in SQLite, never in the browser. Refresh tokens are rotated on use.
+- The original README also states: **"This is a localhost internal tool with no authorization layer of its own — anyone who can reach the port inherits the signed-in session. Don't expose it beyond localhost without adding auth."** This statement appears alongside the shared-deployment hub-membership gate described above. Verify which access-control description matches the current implementation before exposing the application beyond localhost.
+
+---
+
+## License
+
+This sample is intended to use the **MIT License** in accordance with the Autodesk code-sample guidelines.
+
+Include a `LICENSE` file containing the MIT License in the repository root.
