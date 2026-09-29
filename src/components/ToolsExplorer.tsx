@@ -279,10 +279,12 @@ export function DatasetUpload({ hasData }: { hasData: boolean }) {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
       setMessage({
-        ok: true,
+        ok: !json.truncatedTables?.length,
         text: `Loaded ${json.tables.length} tables (${json.totalRows.toLocaleString()} rows)${
-          json.skipped?.length ? `, skipped ${json.skipped.length} non-CSV entries` : ""
-        }.`,
+          json.skipped?.length ? `, skipped ${json.skipped.length} entries` : ""
+        }.${json.truncatedTables?.length
+          ? ` Warning: ${json.truncatedTables.join(", ")} exceeded 400,000 rows and were truncated.`
+          : ""}`,
       });
       router.refresh();
     } catch (cause) {

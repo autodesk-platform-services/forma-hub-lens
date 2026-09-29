@@ -1,0 +1,2 @@
+# The original ingest.ts contained a NUL byte; show its source changes as text.
+src/lib/ingest.ts diff

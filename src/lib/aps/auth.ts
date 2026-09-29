@@ -51,6 +51,18 @@ type TokenResponse = {
   scope?: string;
 };
 
+class TokenRequestError extends Error {
+  readonly status: number;
+  readonly code: string | null;
+
+  constructor(status: number, code: string | null) {
+    super(`APS token request failed (${status}${code ? `, ${code}` : ""})`);
+    this.name = "TokenRequestError";
+    this.status = status;
+    this.code = code;
+  }
+}
+
 function basicAuthHeader(): string {
   return "Basic " + Buffer.from(`${env.clientId}:${env.clientSecret}`).toString("base64");
 }
@@ -93,7 +105,16 @@ async function postToken(body: URLSearchParams): Promise<TokenResponse> {
   });
   const text = await res.text();
   if (!res.ok) {
-    throw new Error(`APS token request failed (${res.status}): ${text.slice(0, 500)}`);
+    let code: string | null = null;
+    try {
+      const body = JSON.parse(text) as { error?: unknown };
+      if (typeof body.error === "string" && /^[a-z_]{1,64}$/i.test(body.error)) {
+        code = body.error;
+      }
+    } catch {
+      // Keep the status even if Autodesk returned an unreadable error body.
+    }
+    throw new TokenRequestError(res.status, code);
   }
   return JSON.parse(text) as TokenResponse;
 }
@@ -259,14 +280,8 @@ export async function getSession(): Promise<Session | null> {
   let session = readSession(id);
   if (!session) return null;
 
-  if (session.expiresAt - Date.now() <= 60_000) {
-    try {
-      session = await refresh(session);
-    } catch {
-      destroySession(session.id);
-      return null;
-    }
-  }
+  session = await refreshIfNeeded(session);
+  if (!session) return null;
 
   const checkedAt = session.hubVerifiedAt ?? 0;
   if (Date.now() - checkedAt > HUB_CHECK_TTL_MS) {
@@ -281,6 +296,24 @@ export async function getSession(): Promise<Session | null> {
   }
 
   return session;
+}
+
+/** Return no access on refresh failure, retaining recoverable sessions for retry. */
+export async function refreshIfNeeded(session: Session): Promise<Session | null> {
+  if (session.expiresAt - Date.now() > 60_000) return session;
+  try {
+    return await refresh(session);
+  } catch (error) {
+    const revoked = !session.refreshToken ||
+      (error instanceof TokenRequestError && error.code === "invalid_grant");
+    console.warn(
+      `APS token refresh failed for session ${session.id}: ${
+        error instanceof Error ? error.message : String(error)
+      }${revoked ? "; session removed" : "; session retained for retry"}`,
+    );
+    if (revoked) destroySession(session.id);
+    return null;
+  }
 }
 
 export async function requireSession(): Promise<Session> {

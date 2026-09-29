@@ -51,7 +51,7 @@ USER nextjs
 EXPOSE 3000
 VOLUME ["/data"]
 
-# Hosts that inject their own PORT (Render does) would otherwise fail a probe
+# Hosts that inject their own PORT would otherwise fail a probe
 # hard-coded to 3000, so read it back from the environment.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
   CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||3000)+'/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"

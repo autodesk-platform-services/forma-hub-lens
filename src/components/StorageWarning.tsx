@@ -16,7 +16,7 @@ export function StorageWarning() {
       <div className="mx-auto max-w-[1500px] px-6 py-2 text-xs text-adsk-black">
         <strong className="font-legend">Temporary storage.</strong> This deployment has no
         persistent disk, so sign-ins and loaded data are cleared whenever the service restarts or
-        sleeps (after ~15 minutes idle). Nothing in Autodesk is affected — sign in again and
+        is recycled by its host. Nothing in Autodesk is affected — sign in again and
         re-ingest a completed job from <strong>Extracts</strong> to restore the dashboards, which
         costs none of your daily Data Connector quota.
       </div>

@@ -16,6 +16,7 @@ export default async function ToolsPage() {
   if (!session) return <SignInRequired />;
 
   const tables = listTables();
+  const truncatedTables = tables.filter((table) => table.truncated);
   const datasetRows = tables.reduce((sum, table) => sum + table.rowCount, 0);
   const uploads = recentUploads(3);
 
@@ -52,6 +53,14 @@ export default async function ToolsPage() {
           up automatically. Uploading again replaces the tables it contains.
         </p>
         <DatasetUpload hasData={tables.length > 0} />
+
+        {truncatedTables.length > 0 && (
+          <p role="alert" className="mt-3 rounded border border-adsk-gold bg-adsk-gold/10 px-3 py-2 text-xs text-adsk-black">
+            Some source CSVs exceeded the 400,000 row import limit and were truncated:
+            {" "}{truncatedTables.map((table) => `${table.name}.csv`).join(", ")}.
+            Dashboards using these tables may undercount results.
+          </p>
+        )}
 
         {uploads.length > 0 && (
           <ul className="mt-4 space-y-1 border-t border-adsk-offwhite pt-3">

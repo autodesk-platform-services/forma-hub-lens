@@ -9,6 +9,9 @@ import { registerHooks } from "node:module";
 
 registerHooks({
   resolve(specifier, context, nextResolve) {
+    if (specifier === "next/headers") {
+      return nextResolve("next/headers.js", context);
+    }
     if (specifier.startsWith(".") && !/\.[cm]?[jt]sx?$/i.test(specifier)) {
       for (const ext of [".ts", ".tsx", "/index.ts"]) {
         try {

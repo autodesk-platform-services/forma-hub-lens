@@ -127,6 +127,7 @@ CREATE TABLE IF NOT EXISTS dataset_tables (
   sql_name    TEXT NOT NULL,
   columns     TEXT NOT NULL,
   row_count   INTEGER NOT NULL,
+  truncated   INTEGER NOT NULL DEFAULT 0,
   uploaded_at INTEGER NOT NULL
 );
 
@@ -152,6 +153,7 @@ declare global {
  */
 const ADDED_COLUMNS: Array<{ table: string; column: string; definition: string }> = [
   { table: "sessions", column: "hub_verified_at", definition: "INTEGER" },
+  { table: "dataset_tables", column: "truncated", definition: "INTEGER NOT NULL DEFAULT 0" },
 ];
 
 function migrate(db: DatabaseSync): void {
@@ -175,4 +177,11 @@ function open(): DatabaseSync {
 export function getDb(): DatabaseSync {
   if (!globalThis.__formaDb) globalThis.__formaDb = open();
   return globalThis.__formaDb;
+}
+
+/** Close the process-local SQLite connection, including its WAL file handles. */
+export function closeDb(): void {
+  if (!globalThis.__formaDb) return;
+  globalThis.__formaDb.close();
+  globalThis.__formaDb = undefined;
 }

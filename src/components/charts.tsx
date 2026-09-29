@@ -429,7 +429,6 @@ export function ChartCard({ result }: { result: ChartResult }) {
     result.kind === "line" ||
     result.kind === "area" ||
     result.kind === "column" ||
-    result.kind === "stackedColumn" ||
     result.kind === "scatter" ||
     result.kind === "table";
 

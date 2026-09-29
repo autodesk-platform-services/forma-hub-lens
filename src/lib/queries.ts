@@ -15,6 +15,11 @@ export type ActivityFilters = {
 
 type Where = { sql: string; params: Array<string | number> };
 
+function containsPattern(value: string): string {
+  // Treat user-entered % and _ as text rather than SQLite LIKE wildcards.
+  return `%${value.replace(/[!%_]/g, (char) => `!${char}`)}%`;
+}
+
 function buildWhere(filters: ActivityFilters): Where {
   const clauses: string[] = [];
   const params: Array<string | number> = [];
@@ -46,13 +51,13 @@ function buildWhere(filters: ActivityFilters): Where {
     params.push(...filters.actions);
   }
   if (filters.actor?.trim()) {
-    clauses.push("(actor_name LIKE ? OR actor_email LIKE ? OR actor_id LIKE ?)");
-    const like = `%${filters.actor.trim()}%`;
+    clauses.push("(actor_name LIKE ? ESCAPE '!' OR actor_email LIKE ? ESCAPE '!' OR actor_id LIKE ? ESCAPE '!')");
+    const like = containsPattern(filters.actor.trim());
     params.push(like, like, like);
   }
   if (filters.search?.trim()) {
-    clauses.push("(target_name LIKE ? OR action LIKE ? OR raw LIKE ?)");
-    const like = `%${filters.search.trim()}%`;
+    clauses.push("(target_name LIKE ? ESCAPE '!' OR action LIKE ? ESCAPE '!' OR raw LIKE ? ESCAPE '!')");
+    const like = containsPattern(filters.search.trim());
     params.push(like, like, like);
   }
 
@@ -104,9 +109,14 @@ export function listActivities(
       const projectId = row.project_id as string | null;
       let raw: Record<string, string> = {};
       try {
-        raw = JSON.parse((row.raw as string) ?? "{}");
+        const parsed: unknown = JSON.parse((row.raw as string) ?? "{}");
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+          raw = parsed as Record<string, string>;
+        } else {
+          console.warn(`Activity row ${row.id} has a non-object raw payload`);
+        }
       } catch {
-        raw = {};
+        console.warn(`Activity row ${row.id} has invalid raw JSON`);
       }
       return {
         id: Number(row.id),
@@ -145,15 +155,23 @@ export function countByDay(filters: ActivityFilters): Array<{ day: string; count
   return rows.map((row) => ({ day: row.day, count: Number(row.n) }));
 }
 
+const GROUP_COLUMNS = {
+  project_id: "project_id",
+  service: "service",
+  action: "action",
+} as const;
+
 function groupBy(
-  column: string,
+  column: keyof typeof GROUP_COLUMNS,
   filters: ActivityFilters,
   limit: number,
 ): Array<{ key: string; count: number }> {
+  const sqlColumn = GROUP_COLUMNS[column];
+  if (!sqlColumn) throw new Error(`Unsupported group column: ${column}`);
   const where = buildWhere(filters);
   const rows = getDb()
     .prepare(
-      `SELECT COALESCE(NULLIF(${column}, ''), '(unspecified)') AS k, COUNT(*) AS n
+      `SELECT COALESCE(NULLIF(${sqlColumn}, ''), '(unspecified)') AS k, COUNT(*) AS n
        FROM activities ${where.sql}
        GROUP BY k ORDER BY n DESC LIMIT ?`,
     )
