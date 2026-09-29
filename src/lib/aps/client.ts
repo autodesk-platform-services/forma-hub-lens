@@ -49,8 +49,9 @@ type ApsFetchOptions = {
 /**
  * Calls an APS endpoint with the signed-in user's token.
  *
- * Retries 429 and 5xx a couple of times with backoff — Data Connector and Admin
- * both rate limit, and a transient 503 shouldn't blank out a dashboard panel.
+ * Retries read requests on 429 and 5xx with backoff. Writes are sent once:
+ * a server can finish a POST/PATCH/DELETE before returning an error, and a
+ * retry could create a second job or repeat a bulk change.
  */
 export async function apsFetch<T>(
   session: Session,
@@ -69,10 +70,13 @@ export async function apsFetch<T>(
   if (options.body !== undefined) headers["Content-Type"] = "application/json";
   if (options.regional && env.region) headers["Region"] = env.region;
 
+  const method = (options.method ?? "GET").toUpperCase();
+  const maxAttempts = method === "GET" || method === "HEAD" ? 3 : 1;
+
   let lastError: ApsError | null = null;
-  for (let attempt = 0; attempt < 3; attempt++) {
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const res = await fetch(url, {
-      method: options.method ?? "GET",
+      method,
       headers,
       body: options.body === undefined ? undefined : JSON.stringify(options.body),
       cache: "no-store",
@@ -87,7 +91,7 @@ export async function apsFetch<T>(
     lastError = new ApsError(res.status, url.toString(), body);
 
     const retryable = res.status === 429 || res.status >= 500;
-    if (!retryable || attempt === 2) break;
+    if (!retryable || attempt === maxAttempts - 1) break;
 
     const retryAfter = Number(res.headers.get("Retry-After"));
     const waitMs = Number.isFinite(retryAfter) && retryAfter > 0

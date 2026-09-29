@@ -43,7 +43,7 @@ function factColumn(table: DatasetTable, column: string): string | undefined {
 
 type JoinPlan = { clause: string; expr: string } | null;
 
-function planJoin(fact: DatasetTable, dimName: string, dimColumn: string): JoinPlan {
+function planJoin(fact: DatasetTable, dimName: string, dimColumn: string, alias = "d"): JoinPlan {
   const dim = getTable(dimName);
   if (!dim) return null;
   const dimCol = resolveColumn(dim, dimColumn);
@@ -58,8 +58,8 @@ function planJoin(fact: DatasetTable, dimName: string, dimColumn: string): JoinP
     const factKey = resolveColumn(fact, candidate);
     if (factKey) {
       return {
-        clause: `LEFT JOIN ${q(dim.sqlName)} AS d ON d.${q(keyOn)} = f.${q(factKey)}`,
-        expr: `d.${q(dimCol)}`,
+        clause: `LEFT JOIN ${q(dim.sqlName)} AS ${alias} ON ${alias}.${q(keyOn)} = f.${q(factKey)}`,
+        expr: `${alias}.${q(dimCol)}`,
       };
     }
   }
@@ -91,12 +91,15 @@ function whereSql(
       parts.push(`(${col} IS NOT NULL AND ${col} <> '')`);
     } else if (cond.isNull) {
       parts.push(`(${col} IS NULL OR ${col} = '')`);
+    } else if (cond.beforeToday) {
+      parts.push(`date(${col}) < date('now')`);
     }
   }
   return { sql: parts.length ? ` WHERE ${parts.join(" AND ")}` : "", params };
 }
 
-function aggSql(expr: string | undefined, agg: string): string {
+function aggSql(expr: string | undefined, agg: string): string | null {
+  if (!expr && !["count", "distinct"].includes(agg)) return null;
   switch (agg) {
     case "count":
       return expr ? `COUNT(${expr})` : "COUNT(*)";
@@ -137,7 +140,9 @@ export function runKpi(kpi: Kpi): KpiResult {
   const where = whereSql(table, kpi.where);
   if (!where) return { ...base, reason: "filter column missing" };
 
-  const sql = `SELECT ${aggSql(expr, kpi.agg)} AS v FROM ${q(table.sqlName)} AS f${where.sql}`;
+  const aggregate = aggSql(expr, kpi.agg);
+  if (!aggregate) return { ...base, reason: `${kpi.agg} requires a column` };
+  const sql = `SELECT ${aggregate} AS v FROM ${q(table.sqlName)} AS f${where.sql}`;
   try {
     const row = getDb().prepare(sql).get(...where.params) as { v: number | string | null };
     return { ...base, value: row?.v ?? 0, available: true };
@@ -224,6 +229,7 @@ export function runChart(chart: Chart): ChartResult {
     return { ...base, reason: `column "${chart.value.column}" missing` };
   }
   const measure = aggSql(valueColumn, chart.value?.agg ?? "count");
+  if (!measure) return { ...base, reason: `${chart.value?.agg} requires a column` };
 
   const select = [`${categoryExpr} AS k`, `${measure} AS v`];
   const group = ["k"];
@@ -235,12 +241,27 @@ export function runChart(chart: Chart): ChartResult {
   const orderBy = chart.category.bucket ? "k ASC" : "v DESC";
   const limit = chart.limit ?? (chart.category.bucket ? 400 : 15);
 
-  const sql =
-    `SELECT ${select.join(", ")} FROM ${q(fact.sqlName)} AS f ${joinClause}${where.sql}` +
-    ` GROUP BY ${group.join(", ")} ORDER BY ${orderBy} LIMIT ${Math.min(limit * (seriesExpr ? 6 : 1), 3000)}`;
+  // A stacked bar must keep every series slice for each selected category.
+  // Limiting the grouped (category, series) rows drops slices and can change
+  // both the chart totals and which categories appear.
+  const sql = chart.kind === "stackedBar" && seriesExpr
+    ? `WITH grouped AS (` +
+      `SELECT ${select.join(", ")} FROM ${q(fact.sqlName)} AS f ${joinClause}${where.sql}` +
+      ` GROUP BY ${group.join(", ")}` +
+      `), top_categories AS (` +
+      `SELECT k FROM grouped WHERE k IS NOT NULL AND k <> ''` +
+      ` GROUP BY k ORDER BY SUM(v) DESC LIMIT ?` +
+      `) SELECT grouped.k, grouped.s, grouped.v FROM grouped` +
+      ` JOIN top_categories ON grouped.k = top_categories.k` +
+      ` ORDER BY grouped.k, grouped.v DESC`
+    : `SELECT ${select.join(", ")} FROM ${q(fact.sqlName)} AS f ${joinClause}${where.sql}` +
+      ` GROUP BY ${group.join(", ")} ORDER BY ${orderBy} LIMIT ${Math.min(limit * (seriesExpr ? 6 : 1), 3000)}`;
 
   try {
-    const rows = getDb().prepare(sql).all(...where.params) as Array<{
+    const params = chart.kind === "stackedBar" && seriesExpr
+      ? [...where.params, Math.min(limit, 200)]
+      : where.params;
+    const rows = getDb().prepare(sql).all(...params) as Array<{
       k: string | null;
       v: number | null;
       s?: string | null;
@@ -270,14 +291,20 @@ function runTable(
   const cols = chart.columns ?? [];
   const select: string[] = [];
   const outCols: Array<{ key: string; label: string }> = [];
-  let joinClause = "";
+  const joinClauses: string[] = [];
+  const joinAliases = new Map<string, string>();
 
   cols.forEach((col, index) => {
     const alias = `c${index}`;
     if (col.table && col.table !== chart.table) {
-      const plan = planJoin(fact, col.table, col.column);
+      const existingAlias = joinAliases.get(col.table);
+      const joinAlias = existingAlias ?? `d${joinAliases.size + 1}`;
+      const plan = planJoin(fact, col.table, col.column, joinAlias);
       if (!plan) return;
-      joinClause = plan.clause;
+      if (!existingAlias) {
+        joinAliases.set(col.table, joinAlias);
+        joinClauses.push(plan.clause);
+      }
       select.push(`${plan.expr} AS ${alias}`);
     } else {
       const expr = factColumn(fact, col.column);
@@ -296,7 +323,7 @@ function runTable(
   }
 
   const sql =
-    `SELECT ${select.join(", ")} FROM ${q(fact.sqlName)} AS f ${joinClause}${where.sql}${order}` +
+    `SELECT ${select.join(", ")} FROM ${q(fact.sqlName)} AS f ${joinClauses.join(" ")}${where.sql}${order}` +
     ` LIMIT ${Math.min(chart.limit ?? 25, 200)}`;
 
   try {

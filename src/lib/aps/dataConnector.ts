@@ -122,6 +122,14 @@ export async function createDataRequest(
     if (!input.startDate || !input.endDate) {
       throw new Error("A CUSTOM date range needs both a start date and an end date.");
     }
+    const start = Date.parse(input.startDate);
+    const end = Date.parse(input.endDate);
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) {
+      throw new Error("The CUSTOM date range must have a valid end on or after its start.");
+    }
+    if (end - start >= 31 * 86_400_000) {
+      throw new Error("Data Connector caps custom activity extraction at 31 days. Split this into multiple requests.");
+    }
     body.startDate = input.startDate;
     body.endDate = input.endDate;
   }

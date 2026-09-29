@@ -8,6 +8,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { parseCsv, parseCsvRecords } from "../src/lib/csv.ts";
+import { csvCell } from "../src/lib/csvExport.ts";
 import {
   isActivityFile,
   mapColumns,
@@ -70,6 +71,16 @@ test("records are keyed by header, with the BOM stripped", async () => {
 test("multi-byte characters survive chunk boundaries", async () => {
   const records = await collect(parseCsvRecords(streamOf("id,name\n1,Ævar Ólafsdóttir 日本\n")));
   assert.equal(records[0].name, "Ævar Ólafsdóttir 日本");
+});
+
+test("CSV export keeps spreadsheet formula text inert", () => {
+  assert.equal(csvCell('=HYPERLINK("https://example.test","x")'),
+    `"'=HYPERLINK(""https://example.test"",""x"")"`);
+  assert.equal(csvCell(" +SUM(A1:A2)"), `"' +SUM(A1:A2)"`);
+  assert.equal(csvCell("-1"), `"'-1"`);
+  assert.equal(csvCell("@name"), `"'@name"`);
+  assert.equal(csvCell("＝1+2"), `"'＝1+2"`);
+  assert.equal(csvCell('ordinary,"quoted"'), '"ordinary,""quoted"""');
 });
 
 test("maps a docs-style activity header", () => {

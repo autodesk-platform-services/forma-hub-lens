@@ -31,18 +31,20 @@ export type DatasetTable = {
   sqlName: string;
   columns: Array<{ name: string; sqlName: string }>;
   rowCount: number;
+  truncated: boolean;
   uploadedAt: number;
 };
 
 export function listTables(): DatasetTable[] {
   const rows = getDb()
-    .prepare("SELECT name, sql_name, columns, row_count, uploaded_at FROM dataset_tables ORDER BY name")
+    .prepare("SELECT name, sql_name, columns, row_count, truncated, uploaded_at FROM dataset_tables ORDER BY name")
     .all() as Array<Record<string, string | number>>;
   return rows.map((row) => ({
     name: row.name as string,
     sqlName: row.sql_name as string,
     columns: JSON.parse(row.columns as string),
     rowCount: Number(row.row_count),
+    truncated: Boolean(row.truncated),
     uploadedAt: Number(row.uploaded_at),
   }));
 }
@@ -55,7 +57,7 @@ export function tableMap(): Map<string, DatasetTable> {
 
 export function getTable(name: string): DatasetTable | undefined {
   const row = getDb()
-    .prepare("SELECT name, sql_name, columns, row_count, uploaded_at FROM dataset_tables WHERE name = ?")
+    .prepare("SELECT name, sql_name, columns, row_count, truncated, uploaded_at FROM dataset_tables WHERE name = ?")
     .get(name) as Record<string, string | number> | undefined;
   if (!row) return undefined;
   return {
@@ -63,6 +65,7 @@ export function getTable(name: string): DatasetTable | undefined {
     sqlName: row.sql_name as string,
     columns: JSON.parse(row.columns as string),
     rowCount: Number(row.row_count),
+    truncated: Boolean(row.truncated),
     uploadedAt: Number(row.uploaded_at),
   };
 }
@@ -80,7 +83,8 @@ export function resolveColumn(table: DatasetTable, column: string): string | und
 export type UploadSummary = {
   uploadId: string;
   fileName: string;
-  tables: Array<{ name: string; rows: number; columns: number }>;
+  tables: Array<{ name: string; rows: number; columns: number; truncated: boolean }>;
+  truncatedTables: string[];
   skipped: Array<{ name: string; reason: string }>;
   totalRows: number;
 };
@@ -108,6 +112,7 @@ export async function ingestZip(
     uploadId: crypto.randomUUID(),
     fileName,
     tables: [],
+    truncatedTables: [],
     skipped: [],
     totalRows: 0,
   };
@@ -125,6 +130,7 @@ export async function ingestZip(
     try {
       const rows = await loadCsvTable(tableName, data);
       summary.tables.push(rows);
+      if (rows.truncated) summary.truncatedTables.push(rows.name);
       summary.totalRows += rows.rows;
     } catch (error) {
       summary.skipped.push({
@@ -144,7 +150,9 @@ export async function ingestZip(
     summary.tables.length,
     summary.totalRows,
     Date.now(),
-    summary.skipped.length ? JSON.stringify(summary.skipped.slice(0, 40)) : null,
+    summary.skipped.length || summary.truncatedTables.length
+      ? JSON.stringify({ skipped: summary.skipped.slice(0, 40), truncatedTables: summary.truncatedTables })
+      : null,
   );
 
   return summary;
@@ -153,7 +161,7 @@ export async function ingestZip(
 async function loadCsvTable(
   tableName: string,
   data: Uint8Array,
-): Promise<{ name: string; rows: number; columns: number }> {
+): Promise<{ name: string; rows: number; columns: number; truncated: boolean }> {
   const db = getDb();
   const sqlName = "ds_" + sanitise(tableName);
 
@@ -167,6 +175,7 @@ async function loadCsvTable(
   let columns: Array<{ name: string; sqlName: string }> | null = null;
   let insert: ReturnType<typeof db.prepare> | null = null;
   let count = 0;
+  let truncated = false;
   let pending = 0;
   let began = false;
 
@@ -194,7 +203,10 @@ async function loadCsvTable(
         began = true;
       }
 
-      if (count >= MAX_ROWS_PER_TABLE) break;
+      if (count >= MAX_ROWS_PER_TABLE) {
+        truncated = true;
+        break;
+      }
       const values = columns.map((c) => {
         const v = record[c.name];
         return v === undefined || v === "" ? null : v;
@@ -230,14 +242,15 @@ async function loadCsvTable(
   }
 
   db.prepare(
-    `INSERT INTO dataset_tables (name, sql_name, columns, row_count, uploaded_at)
-     VALUES (?, ?, ?, ?, ?)
+    `INSERT INTO dataset_tables (name, sql_name, columns, row_count, truncated, uploaded_at)
+     VALUES (?, ?, ?, ?, ?, ?)
      ON CONFLICT(name) DO UPDATE SET
        sql_name = excluded.sql_name, columns = excluded.columns,
-       row_count = excluded.row_count, uploaded_at = excluded.uploaded_at`,
-  ).run(tableName, sqlName, JSON.stringify(columns), count, Date.now());
+       row_count = excluded.row_count, truncated = excluded.truncated,
+       uploaded_at = excluded.uploaded_at`,
+  ).run(tableName, sqlName, JSON.stringify(columns), count, truncated ? 1 : 0, Date.now());
 
-  return { name: tableName, rows: count, columns: columns.length };
+  return { name: tableName, rows: count, columns: columns.length, truncated };
 }
 
 export function clearDataset(): number {

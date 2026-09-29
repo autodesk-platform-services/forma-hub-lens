@@ -19,6 +19,8 @@ export type Where = {
   in?: string[];
   notNull?: boolean;
   isNull?: boolean;
+  /** Compare a date column with the current UTC date. */
+  beforeToday?: boolean;
 };
 
 export type Kpi = {
@@ -36,10 +38,8 @@ export type ChartKind =
   | "column"
   | "bar"
   | "stackedBar"
-  | "stackedColumn"
   | "donut"
   | "treemap"
-  | "gauge"
   | "table"
   | "scatter";
 
@@ -327,11 +327,11 @@ export const TOOL_SPECS: ToolSpec[] = [
       { label: "Reviews", table: "reviews_reviews", column: "id", agg: "count" },
       { label: "Project Value", table: "admin_projects", column: "value", agg: "sum", format: "money" },
       { label: "Design Issues", table: "issues_issues", column: "issue_id", agg: "count" },
-      { label: "Overdue Submittals", table: "submittalsacc_items", column: "id", agg: "count", where: [{ column: "status_value", notEquals: "closed" }, { column: "due_date", notNull: true }] },
+      { label: "Overdue Submittals", table: "submittalsacc_items", column: "id", agg: "count", where: [{ column: "status_value", notEquals: "closed" }, { column: "due_date", beforeToday: true }] },
     ],
     charts: [
       { kind: "column", title: "Design issues over time", table: "issues_issues", category: { column: "created_at", bucket: "month" }, value: { column: "issue_id", agg: "count" } },
-      { kind: "column", title: "Overdue submittals trend", table: "submittalsacc_items", category: { column: "created_at", bucket: "month" }, value: { column: "id", agg: "count" } },
+      { kind: "column", title: "Overdue submittals trend", table: "submittalsacc_items", category: { column: "due_date", bucket: "month" }, value: { column: "id", agg: "count" }, where: [{ column: "status_value", notEquals: "closed" }, { column: "due_date", beforeToday: true }] },
       { kind: "bar", title: "Reviews by Project", table: "reviews_reviews", category: { table: "admin_projects", column: "name" }, value: { column: "id", agg: "count" }, limit: 12 },
       { kind: "donut", title: "Review status", table: "reviews_reviews", category: { column: "status" }, value: { column: "id", agg: "count" } },
     ],

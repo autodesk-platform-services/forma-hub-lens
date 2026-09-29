@@ -21,6 +21,7 @@ process.env.APS_CALLBACK_URL = "http://localhost:3000/api/aps/callback";
 process.env.FORMA_HUB_ID = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
 
 const { ingestZip, listTables, getTable } = await import("../src/lib/dataset.ts");
+const { closeDb } = await import("../src/lib/db.ts");
 const { TOOL_SPECS } = await import("../src/lib/dashboards/specs.ts");
 const { runDashboard, toolStatus } = await import("../src/lib/dashboards/engine.ts");
 
@@ -35,7 +36,10 @@ before(() => {
   );
 });
 
-after(() => fs.rmSync(workdir, { recursive: true, force: true }));
+after(() => {
+  closeDb();
+  fs.rmSync(workdir, { recursive: true, force: true });
+});
 
 test("ingests every CSV in the archive", async () => {
   const bytes = new Uint8Array(fs.readFileSync(zipPath));

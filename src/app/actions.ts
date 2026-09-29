@@ -90,7 +90,7 @@ export async function requestExtract(
       if (!Number.isFinite(spanDays) || spanDays < 0) {
         return { ok: false, message: "End date must be on or after the start date." };
       }
-      if (spanDays > 31) {
+      if (spanDays >= 31) {
         return {
           ok: false,
           message:
@@ -153,18 +153,22 @@ export async function ingestExtract(
     revalidatePath("/", "layout");
 
     const ingested = summary.files.filter((file) => !file.skipped);
+    const failed = summary.files.filter((file) => file.failed);
     if (ingested.length === 0) {
       return {
         ok: false,
-        message:
-          "This extract contains no activity CSVs. Re-run the request with the 'activities' service group selected.",
+        message: failed.length
+          ? `No activity CSVs were ingested: ${failed.map((file) => `${file.name}: ${file.reason}`).join("; ")}`
+          : "This extract contains no activity CSVs. Re-run the request with the 'activities' service group selected.",
       };
     }
     return {
-      ok: true,
+      ok: failed.length === 0,
       message: `Ingested ${summary.totalRows.toLocaleString()} rows from ${ingested
         .map((file) => file.name)
-        .join(", ")}.`,
+        .join(", ")}.${failed.length
+          ? ` ${failed.length} file(s) failed and can be retried: ${failed.map((file) => file.name).join(", ")}.`
+          : ""}`,
     };
   } catch (error) {
     return { ok: false, message: describe(error) };

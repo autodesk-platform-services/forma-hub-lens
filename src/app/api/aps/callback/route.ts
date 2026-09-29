@@ -1,10 +1,14 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { consumeState, exchangeCode, HubAccessError, setSessionCookie } from "@/lib/aps/auth";
+import { configProblems } from "@/lib/env";
 
 export const dynamic = "force-dynamic";
 
 /** Registered APS callback: http://localhost:3000/api/aps/callback */
 export async function GET(request: NextRequest) {
+  if (configProblems().length > 0) {
+    return errorPage("This deployment's APS configuration is incomplete. Ask its operator to check the setup.");
+  }
   const params = request.nextUrl.searchParams;
 
   const error = params.get("error");

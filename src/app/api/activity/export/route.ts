@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getSession } from "@/lib/aps/auth";
 import { parseFilters, type SearchParams } from "@/lib/filters";
 import { listActivities } from "@/lib/queries";
+import { csvCell } from "@/lib/csvExport";
 
 export const dynamic = "force-dynamic";
 
@@ -74,9 +75,4 @@ export async function GET(request: NextRequest) {
       "Content-Disposition": `attachment; filename="forma-activity-${stamp}.csv"`,
     },
   });
-}
-
-function csvCell(value: string): string {
-  if (/[",\n\r]/.test(value)) return `"${value.replace(/"/g, '""')}"`;
-  return value;
 }

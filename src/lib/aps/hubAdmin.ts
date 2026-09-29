@@ -4,6 +4,7 @@ import { env } from "../env";
 import type { Session } from "./auth";
 import { apsFetch, apsPaginate } from "./client";
 import { getTwoLeggedToken } from "./twoLegged";
+import { USERINFO_URL } from "./endpoints";
 
 /**
  * Hub management operations on the Forma Admin API.
@@ -235,7 +236,23 @@ type HqUser = { uid?: string; id?: string; email?: string; access_level?: string
  * credentials, so without this any hub member could archive projects.
  */
 export async function requireAccountAdmin(session: Session): Promise<void> {
-  const email = session.userEmail?.trim().toLowerCase();
+  let email = session.userEmail?.trim().toLowerCase();
+  if (!email) {
+    // /userinfo is best-effort during sign-in. Re-read it here if that first
+    // request failed, while still denying the action when identity is unknown.
+    try {
+      const profile = await fetch(USERINFO_URL, {
+        headers: { Authorization: `Bearer ${session.accessToken}`, Accept: "application/json" },
+        cache: "no-store",
+      });
+      if (profile.ok) {
+        const body = (await profile.json()) as { email?: unknown };
+        if (typeof body.email === "string") email = body.email.trim().toLowerCase();
+      }
+    } catch {
+      // Fail closed below; no app-credential write should proceed.
+    }
+  }
   if (!email) throw new NotAccountAdminError();
 
   const token = await getTwoLeggedToken();
@@ -262,14 +279,20 @@ export async function requireAccountAdmin(session: Session): Promise<void> {
 export async function fetchProjectStatus(
   projectId: string,
 ): Promise<{ name: string; status: string } | null> {
-  const token = await getTwoLeggedToken();
-  const res = await fetch(`${HQ_V1}/accounts/${env.hubId}/projects/${projectId}`, {
-    headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
-    cache: "no-store",
-  });
-  if (!res.ok) return null;
-  const body = (await res.json()) as { name?: string; status?: string };
-  return { name: body.name ?? projectId, status: body.status ?? "unknown" };
+  try {
+    const token = await getTwoLeggedToken();
+    const res = await fetch(`${HQ_V1}/accounts/${env.hubId}/projects/${projectId}`, {
+      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    const body = (await res.json()) as { name?: string; status?: string };
+    return { name: body.name ?? projectId, status: body.status ?? "unknown" };
+  } catch {
+    // One failed status read must not abort a bulk archive and skip the cache
+    // update for projects already archived earlier in the run.
+    return null;
+  }
 }
 
 /** Sets a project's status. Only ever sends `status` — no other field is touched. */

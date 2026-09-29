@@ -33,7 +33,7 @@ export const env = {
     return process.env.DATA_DIR?.trim() || ".data";
   },
   /**
-   * Set on deployments with no persistent disk (e.g. a Render free instance),
+   * Set on deployments with no persistent disk,
    * where the cache is wiped on every restart, redeploy or idle spin-down.
    * Purely cosmetic — it drives a warning banner so the data loss is expected
    * rather than mysterious.

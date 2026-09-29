@@ -87,6 +87,22 @@ test("refuses a session with no email", async () => {
   );
 });
 
+test("recovers an admin email when userinfo failed during sign-in", async () => {
+  const calls: string[] = [];
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    const url = String(input);
+    calls.push(url);
+    if (url.includes("/userinfo")) return Response.json({ email: "admin@example.com" });
+    if (url.includes("/authentication/v2/token")) {
+      return Response.json({ access_token: "app-token", expires_in: 3600 });
+    }
+    return Response.json([{ email: "admin@example.com", access_level: "account_admin" }]);
+  }) as typeof fetch;
+  await requireAccountAdmin({ ...session, userEmail: null, accessToken: "user-token" });
+  assert.ok(calls.some((url) => url.includes("/userinfo")));
+  assert.ok(calls.some((url) => url.includes("/users/search")));
+});
+
 test("archiving sends only status, and never a DELETE", async () => {
   const calls = mockApi(() => ({ status: 200, body: { status: "archived" } }));
   const result = await setProjectStatus("proj-1", "archived");
@@ -127,4 +143,9 @@ test("reads live status rather than trusting the cache", async () => {
 test("returns null when a project cannot be read", async () => {
   mockApi(() => ({ status: 404, body: {} }));
   assert.equal(await fetchProjectStatus("missing"), null);
+});
+
+test("returns null when a live project status request throws", async () => {
+  mockApi(() => { throw new Error("network down"); });
+  assert.equal(await fetchProjectStatus("proj-1"), null);
 });
