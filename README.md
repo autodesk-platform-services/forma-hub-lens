@@ -29,7 +29,7 @@ The sample shows how to turn asynchronous Data Connector CSV extracts into a sea
 ### Prerequisites
 
 - Node.js 22 or later and npm.
-- An APS **Traditional Web App** with its Client ID provisioned for the target Autodesk Forma/ACC account under **Hub Admin › Custom Integrations**. See [Provision access in other products](https://get-started.aps.autodesk.com/).
+- An APS **Traditional Web App** with its Client ID provisioned for the target Autodesk Forma/ACC account under **Hub Admin › Custom Integrations**. See [Provision access in other products](https://get-started.aps.autodesk.com/#provision-access-in-other-products).
 - A Forma hub ID and an account with Hub Admin or Executive Overview access.
 - An OAuth callback registered on the APS app that exactly matches this app's local callback: `http://localhost:3000/api/aps/callback`. APS tutorial examples often use port 8080; this app runs on **3000**.
 

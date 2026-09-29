@@ -93,7 +93,7 @@ Before running the sample locally, you need:
 - access to an Autodesk Forma hub,
 - a Forma account with **Hub Admin** or **Executive Overview** rights, and
 - APS application credentials, and
-- the APS Client ID provisioned for the target Forma/ACC account under **Hub Admin › Custom Integrations**; follow [Autodesk's provisioning steps](https://get-started.aps.autodesk.com/).
+- the APS Client ID provisioned for the target Forma/ACC account under **Hub Admin › Custom Integrations**; follow [Autodesk's provisioning steps](https://get-started.aps.autodesk.com/#provision-access-in-other-products).
 
 Storage uses the Node 22+ built-in `node:sqlite`, so there is no native dependency to compile.
 
