@@ -5,21 +5,19 @@ import "./globals.css";
 import { getSession } from "@/lib/aps/auth";
 import { configProblems } from "@/lib/env";
 import { StorageWarning } from "@/components/StorageWarning";
+import { PrimaryNav } from "@/components/PrimaryNav";
+import { HeaderSearch } from "@/components/HeaderSearch";
+import { HeaderSavedMenu } from "@/components/HeaderSavedMenu";
+import { ProvenanceBadge } from "@/components/ProvenanceBadge";
+import { portfolioSource } from "@/lib/governance";
+import { listTables } from "@/lib/dataset";
+import { listSavedViews, listWatchItems, savedViewsOwner } from "@/lib/savedViews";
 import { signOut } from "./actions";
 
 export const metadata: Metadata = {
   title: "Forma Hub Lens",
   description: "Cross-project activity and hub management for an Autodesk Forma hub",
 };
-
-const NAV = [
-  { href: "/", label: "Overview" },
-  { href: "/tools", label: "Tools" },
-  { href: "/projects", label: "Projects" },
-  { href: "/activity", label: "Activity" },
-  { href: "/extracts", label: "Extracts" },
-  { href: "/manage", label: "Manage" },
-];
 
 /**
  * Autodesk mark, top-left on every screen.
@@ -45,37 +43,35 @@ function AutodeskMark() {
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const problems = configProblems();
   const session = problems.length === 0 ? await getSession() : null;
+  const source = session ? portfolioSource() : null;
+  const tables = session ? listTables() : [];
+  const latestZipImport = tables.length ? Math.max(...tables.map((table) => table.uploadedAt)) : null;
+  const savedOwner = session ? savedViewsOwner(session) : null;
+  const savedSummary = {
+    hasOwner: Boolean(savedOwner),
+    views: savedOwner ? listSavedViews(savedOwner).slice(0, 4) : [],
+    watched: savedOwner ? listWatchItems(savedOwner).slice(0, 4) : [],
+  };
 
   return (
     <html lang="en">
       <body className="flex min-h-screen flex-col antialiased">
         <header className="surface-dark">
-          <div className="mx-auto flex max-w-[1500px] flex-wrap items-center gap-x-6 gap-y-2 px-6 py-3">
+          <div className="mx-auto flex max-w-[1500px] flex-wrap items-center gap-x-5 gap-y-2 px-6 py-3">
             <Link href="/" className="flex items-center gap-2.5">
               <AutodeskMark />
               <span className="font-legend text-sm tracking-tight text-adsk-white">
                 Forma Hub Lens
               </span>
-              <span className="rounded border border-adsk-gray px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-adsk-lightgray">
-                internal
-              </span>
             </Link>
 
-            <nav className="flex flex-wrap items-center gap-1">
-              {NAV.map((item) => (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className="rounded px-2.5 py-1.5 font-legend text-xs text-adsk-lightgray hover:bg-white/10 hover:text-adsk-white"
-                >
-                  {item.label}
-                </Link>
-              ))}
-            </nav>
+            <PrimaryNav isHubAdmin={session?.hubRole === "hub_admin"} />
 
-            <div className="ml-auto flex items-center gap-3 text-xs">
+            <div className="ml-auto flex flex-wrap items-center gap-3 text-xs">
               {session ? (
                 <>
+                  <HeaderSearch />
+                  <HeaderSavedMenu initial={savedSummary} />
                   <span className="text-adsk-lightgray">
                     {session.userName || session.userEmail || "signed in"}
                   </span>
@@ -100,13 +96,27 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           </div>
         </header>
 
+        {session && <div role="note" aria-label="Data source status" className="border-b border-adsk-lightgray bg-adsk-white">
+          <div className="mx-auto flex max-w-[1500px] flex-wrap items-center gap-x-2 gap-y-1 px-6 py-2">
+            <span className="mr-1 text-[10px] font-semibold uppercase tracking-wide text-adsk-gray">Sources</span>
+            <>
+              {source?.projectSyncedAt ? <ProvenanceBadge source="project-sync" asOf={source.projectSyncedAt} />
+                : <span className="rounded border border-adsk-lightgray px-2 py-0.5 text-[11px] text-adsk-gray">Projects · not synced</span>}
+              {source?.activityIngestedAt ? <ProvenanceBadge source="activity-ingest" asOf={source.activityIngestedAt} />
+                : <span className="rounded border border-adsk-lightgray px-2 py-0.5 text-[11px] text-adsk-gray">Activity · not ingested</span>}
+              {latestZipImport ? <ProvenanceBadge source="user-zip" asOf={latestZipImport} />
+                : <span className="rounded border border-adsk-lightgray px-2 py-0.5 text-[11px] text-adsk-gray">User ZIP · not loaded</span>}
+            </>
+          </div>
+        </div>}
+
         <StorageWarning />
 
         <main className="mx-auto w-full max-w-[1500px] flex-1 px-6 py-6">{children}</main>
 
         <footer className="mx-auto w-full max-w-[1500px] px-6 pb-4 text-right">
           <p className="text-[8px] text-adsk-gray">
-            Autodesk and Forma are registered trademarks of Autodesk, Inc. Internal use only.
+            Autodesk and Forma are registered trademarks of Autodesk, Inc.
           </p>
         </footer>
       </body>

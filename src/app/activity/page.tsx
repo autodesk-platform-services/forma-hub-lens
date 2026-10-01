@@ -14,6 +14,8 @@ import {
 } from "@/lib/queries";
 import { BarList, Card, DailyChart, EmptyState, formatDateTime } from "@/components/ui";
 import { SetupRequired, SignInRequired } from "@/components/Gate";
+import { actionLabel, actorDisplay, serviceLabel } from "@/lib/activityPresentation";
+import { CheckboxList } from "@/components/CheckboxList";
 
 export const dynamic = "force-dynamic";
 
@@ -54,8 +56,6 @@ export default async function ActivityPage({
   const actions = distinctValues("action");
   const exportQuery = filtersToQuery(filters).toString();
 
-  const selected = new Set(filters.projectIds ?? []);
-
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-4">
@@ -65,12 +65,20 @@ export default async function ActivityPage({
             {total.toLocaleString()} matching event{total === 1 ? "" : "s"} across the hub
           </p>
         </div>
-        <a
-          href={`/api/activity/export${exportQuery ? `?${exportQuery}` : ""}`}
-          className="rounded border border-adsk-lightgray px-3 py-1.5 text-xs font-medium text-adsk-black hover:border-adsk-gray hover:text-adsk-black"
-        >
-          Export CSV
-        </a>
+        <div className="flex gap-2">
+          <Link
+            href={`/views?save=${encodeURIComponent(`/activity${exportQuery ? `?${exportQuery}` : ""}`)}`}
+            className="rounded border border-adsk-lightgray px-3 py-1.5 text-xs font-medium text-adsk-black hover:border-adsk-gray hover:text-adsk-black"
+          >
+            Save view
+          </Link>
+          <a
+            href={`/api/activity/export${exportQuery ? `?${exportQuery}` : ""}`}
+            className="rounded border border-adsk-lightgray px-3 py-1.5 text-xs font-medium text-adsk-black hover:border-adsk-gray hover:text-adsk-black"
+          >
+            Export CSV
+          </a>
+        </div>
       </div>
 
       <Card title="Filters">
@@ -108,7 +116,7 @@ export default async function ActivityPage({
                 <option value="">All services</option>
                 {services.map((service) => (
                   <option key={service} value={service}>
-                    {service}
+                    {serviceLabel(service)}
                   </option>
                 ))}
               </select>
@@ -121,7 +129,7 @@ export default async function ActivityPage({
                 <option value="">All actions</option>
                 {actions.map((action) => (
                   <option key={action} value={action}>
-                    {action}
+                    {actionLabel(action)}
                   </option>
                 ))}
               </select>
@@ -152,25 +160,9 @@ export default async function ActivityPage({
             </div>
           </div>
 
-          <div>
-            <label className={labelClass} htmlFor="project">
-              Projects <span className="normal-case text-adsk-lightgray">(ctrl-click for several)</span>
-            </label>
-            <select
-              id="project"
-              name="project"
-              multiple
-              size={4}
-              className={`${inputClass} h-auto`}
-              defaultValue={[...selected]}
-            >
-              {projects.map((project) => (
-                <option key={project.id} value={project.id}>
-                  {project.name}
-                </option>
-              ))}
-            </select>
-          </div>
+          <CheckboxList label="Projects" name="project" className="max-h-36"
+            options={projects.map((project) => ({ value: project.id, label: project.name }))}
+            defaultSelected={filters.projectIds ?? []} />
 
           <div className="flex items-center gap-3">
             <button
@@ -238,26 +230,26 @@ export default async function ActivityPage({
                   </tr>
                 </thead>
                 <tbody className="tnum">
-                  {rows.map((row) => (
+                  {rows.map((row) => {
+                    const actor = actorDisplay(row.actorName, row.actorEmail, row.actorId, row.actorResolvedName);
+                    return (
                     <tr key={row.id} className="border-b border-adsk-offwhite align-top hover:bg-adsk-offwhite">
                       <td className="whitespace-nowrap py-2 pr-3 text-adsk-black">
                         {formatDateTime(row.occurredMs)}
                       </td>
                       <td className="max-w-[16rem] truncate py-2 pr-3" title={row.projectName}>
-                        {row.projectName}
+                        {row.projectId ? <Link href={`/projects/${encodeURIComponent(row.projectId)}`}
+                          className="text-adsk-link hover:underline">{row.projectName}</Link> : row.projectName}
                       </td>
                       <td className="max-w-[14rem] py-2 pr-3">
                         <span className="block truncate text-adsk-black">
-                          {row.actorName ?? row.actorEmail ?? "—"}
+                          {row.actorResolvedId ? <Link href={`/people/${encodeURIComponent(row.actorResolvedId)}`}
+                            className="text-adsk-link hover:underline">{actor.label}</Link> : actor.label}
                         </span>
-                        {row.actorName && row.actorEmail && (
-                          <span className="block truncate text-[10px] text-adsk-lightgray">
-                            {row.actorEmail}
-                          </span>
-                        )}
+                        {actor.detail && <span className="block truncate text-[10px] text-adsk-gray" title={actor.detail}>{actor.detail}</span>}
                       </td>
-                      <td className="py-2 pr-3 text-adsk-gray">{row.service ?? "—"}</td>
-                      <td className="py-2 pr-3 text-adsk-black">{row.action ?? "—"}</td>
+                      <td className="py-2 pr-3 text-adsk-gray" title={row.service ?? undefined}>{serviceLabel(row.service)}</td>
+                      <td className="py-2 pr-3 text-adsk-black" title={row.action ?? undefined}>{actionLabel(row.action)}</td>
                       <td className="max-w-[20rem] py-2 pr-3">
                         <span className="block truncate text-adsk-black" title={row.targetName ?? ""}>
                           {row.targetName ?? "—"}
@@ -277,7 +269,7 @@ export default async function ActivityPage({
                         </details>
                       </td>
                     </tr>
-                  ))}
+                  );})}
                 </tbody>
               </table>
             </div>

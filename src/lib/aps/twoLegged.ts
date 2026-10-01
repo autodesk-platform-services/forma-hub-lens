@@ -11,11 +11,10 @@ import { TOKEN_URL } from "./endpoints";
  * two-legged token acts as the *application*, with whatever the integration is
  * entitled to, regardless of who is clicking.
  *
- * It exists for one reason. Archiving a project is only possible through the
- * BIM 360 Account Admin endpoint, which is documented "app only" and rejects
- * three-legged tokens. Because this bypasses per-user permissions, every caller
- * must first pass `requireAccountAdmin()` in hubAdmin.ts — that check is the
- * substitute for the enforcement Autodesk would otherwise be doing.
+ * It is used to verify the signed-in person's hub-level role against the
+ * account directory and for project status changes through the app-only BIM
+ * 360 Account Admin endpoint. Every status write must first pass the explicit
+ * account-admin gate in hubAdmin.ts.
  *
  * Do not reach for this anywhere a three-legged token would work.
  */

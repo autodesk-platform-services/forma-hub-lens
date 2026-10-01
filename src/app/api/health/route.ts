@@ -25,8 +25,9 @@ export async function GET() {
       .get() as { n: number } | undefined;
     checks.database = "ok";
     checks.datasetTables = String(row?.n ?? 0);
-  } catch (error) {
-    checks.database = error instanceof Error ? error.message : String(error);
+  } catch {
+    // This endpoint is public: never disclose filesystem paths or SQL details.
+    checks.database = "unavailable";
   }
 
   const healthy = checks.config === "ok" && checks.database === "ok";

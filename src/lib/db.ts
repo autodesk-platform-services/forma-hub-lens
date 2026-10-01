@@ -1,6 +1,7 @@
 import "server-only";
 
 import { DatabaseSync } from "node:sqlite";
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { env } from "./env";
@@ -29,7 +30,9 @@ CREATE TABLE IF NOT EXISTS sessions (
   user_name      TEXT,
   user_email     TEXT,
   created_at     INTEGER NOT NULL,
-  hub_verified_at INTEGER
+  hub_verified_at INTEGER,
+  hub_role       TEXT,
+  mode           TEXT NOT NULL DEFAULT 'live'
 );
 
 CREATE TABLE IF NOT EXISTS oauth_states (
@@ -107,6 +110,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS activities_fingerprint ON activities (fingerpr
 CREATE INDEX IF NOT EXISTS activities_occurred ON activities (occurred_ms DESC);
 CREATE INDEX IF NOT EXISTS activities_project ON activities (project_id, occurred_ms DESC);
 CREATE INDEX IF NOT EXISTS activities_actor ON activities (actor_email, occurred_ms DESC);
+CREATE INDEX IF NOT EXISTS activities_actor_id ON activities (actor_id, occurred_ms DESC);
 CREATE INDEX IF NOT EXISTS activities_service ON activities (service, occurred_ms DESC);
 CREATE INDEX IF NOT EXISTS activities_action ON activities (action);
 CREATE INDEX IF NOT EXISTS activities_job ON activities (job_id);
@@ -140,6 +144,55 @@ CREATE TABLE IF NOT EXISTS dataset_uploads (
   uploaded_at INTEGER NOT NULL,
   notes       TEXT
 );
+
+-- Short-lived, immutable previews. Execution claims a plan exactly once.
+CREATE TABLE IF NOT EXISTS admin_operation_plans (
+  id            TEXT PRIMARY KEY,
+  session_id    TEXT NOT NULL,
+  actor_user_id TEXT,
+  actor_email   TEXT,
+  kind          TEXT NOT NULL,
+  payload       TEXT NOT NULL,
+  preview       TEXT NOT NULL,
+  created_at    INTEGER NOT NULL,
+  expires_at    INTEGER NOT NULL,
+  claimed_at    INTEGER
+);
+CREATE INDEX IF NOT EXISTS admin_plans_expires ON admin_operation_plans (expires_at);
+
+-- Lens's own action ledger. This records calls made here, not changes made
+-- directly in Forma or another integration.
+CREATE TABLE IF NOT EXISTS admin_operations (
+  id            TEXT PRIMARY KEY,
+  plan_id       TEXT NOT NULL UNIQUE,
+  actor_user_id TEXT,
+  actor_email   TEXT,
+  kind          TEXT NOT NULL,
+  status        TEXT NOT NULL,
+  planned       INTEGER NOT NULL,
+  succeeded     INTEGER NOT NULL DEFAULT 0,
+  submitted     INTEGER NOT NULL DEFAULT 0,
+  skipped       INTEGER NOT NULL DEFAULT 0,
+  failed        INTEGER NOT NULL DEFAULT 0,
+  started_at    INTEGER NOT NULL,
+  finished_at   INTEGER,
+  summary       TEXT,
+  FOREIGN KEY (plan_id) REFERENCES admin_operation_plans(id)
+);
+CREATE INDEX IF NOT EXISTS admin_operations_started ON admin_operations (started_at DESC);
+
+CREATE TABLE IF NOT EXISTS admin_operation_items (
+  operation_id TEXT NOT NULL,
+  item_index  INTEGER NOT NULL,
+  item_key    TEXT NOT NULL,
+  label       TEXT NOT NULL,
+  status      TEXT NOT NULL,
+  detail      TEXT,
+  started_at  INTEGER NOT NULL,
+  finished_at INTEGER,
+  PRIMARY KEY (operation_id, item_index),
+  FOREIGN KEY (operation_id) REFERENCES admin_operations(id)
+);
 `;
 
 declare global {
@@ -152,7 +205,9 @@ declare global {
  * them to a database that already exists, so bring those forward explicitly.
  */
 const ADDED_COLUMNS: Array<{ table: string; column: string; definition: string }> = [
+  { table: "sessions", column: "mode", definition: "TEXT NOT NULL DEFAULT 'live'" },
   { table: "sessions", column: "hub_verified_at", definition: "INTEGER" },
+  { table: "sessions", column: "hub_role", definition: "TEXT" },
   { table: "dataset_tables", column: "truncated", definition: "INTEGER NOT NULL DEFAULT 0" },
 ];
 
@@ -168,7 +223,11 @@ function migrate(db: DatabaseSync): void {
 function open(): DatabaseSync {
   const dir = path.resolve(process.cwd(), env.dataDir);
   fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
-  const db = new DatabaseSync(path.join(dir, "forma-console.sqlite"));
+  // Keep cached hub data and sessions isolated if one DATA_DIR is reused with
+  // a different FORMA_HUB_ID. A hash also keeps the configured ID out of the
+  // filename and prevents it from being interpreted as a path component.
+  const hubKey = createHash("sha256").update(env.hubId.trim().toLowerCase()).digest("hex").slice(0, 24);
+  const db = new DatabaseSync(path.join(dir, `forma-console-${hubKey}.sqlite`));
   db.exec(SCHEMA);
   migrate(db);
   return db;

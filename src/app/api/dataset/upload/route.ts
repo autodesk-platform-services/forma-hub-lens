@@ -1,16 +1,30 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { getSession } from "@/lib/aps/auth";
-import { ingestZip } from "@/lib/dataset";
+import { HubAdminRequiredError, UnauthorizedError, requireHubAdminSession } from "@/lib/aps/auth";
+import { ingestZip, MAX_DATASET_ARCHIVE_BYTES } from "@/lib/dataset";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
-const MAX_BYTES = 1_500 * 1024 * 1024;
+const MAX_BYTES = MAX_DATASET_ARCHIVE_BYTES;
 
 /** Accepts a Data Connector CSV extract ZIP and loads every CSV into the cache. */
 export async function POST(request: NextRequest) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
+  try {
+    await requireHubAdminSession();
+  } catch (error) {
+    if (error instanceof UnauthorizedError) {
+      return NextResponse.json({ error: error.message }, { status: 401 });
+    }
+    if (error instanceof HubAdminRequiredError) {
+      return NextResponse.json({ error: error.message }, { status: 403 });
+    }
+    return NextResponse.json({ error: "Could not verify live Hub Admin access." }, { status: 503 });
+  }
+
+  const declaredLength = Number(request.headers.get("content-length"));
+  if (Number.isFinite(declaredLength) && declaredLength > MAX_BYTES + 1024 * 1024) {
+    return NextResponse.json({ error: "Upload request exceeds the ZIP size limit." }, { status: 413 });
+  }
 
   let form: FormData;
   try {
@@ -31,7 +45,7 @@ export async function POST(request: NextRequest) {
   }
   if (file.size > MAX_BYTES) {
     return NextResponse.json(
-      { error: `That file is ${(file.size / 1024 / 1024).toFixed(0)} MB; the limit is 1500 MB.` },
+      { error: `That file is ${(file.size / 1024 / 1024).toFixed(0)} MB; the limit is ${MAX_BYTES / 1024 / 1024} MB.` },
       { status: 413 },
     );
   }

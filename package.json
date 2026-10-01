@@ -2,28 +2,45 @@
   "name": "forma-activity-console",
   "version": "0.1.0",
   "private": true,
-  "description": "Internal console for cross-project activity data in an Autodesk Forma hub",
+  "description": "Cross-project portfolio and administration console for Autodesk Forma",
   "scripts": {
     "dev": "next dev -p 3000",
     "build": "next build",
     "start": "next start -p 3000",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "test": "npm run test:parsing && npm run test:data && npm run test:dashboards && npm run test:dashboard-regressions && npm run test:auth && npm run test:aps-safety && npm run test:archive",
+    "test": "npm run test:parsing && npm run test:data && npm run test:dashboards && npm run test:dashboard-regressions && npm run test:auth && npm run test:db-isolation && npm run test:aps-safety && npm run test:archive && npm run test:audit && npm run test:health && npm run test:review-decisions && npm run test:people && npm run test:entities && npm run test:portfolio && npm run test:recipes && npm run test:schedules && npm run test:data-health && npm run test:offboarding && npm run test:permissions && npm run test:integrations && npm run test:reporting-ingest && npm run test:closeout && npm run test:cleanup && npm run test:organization",
     "test:parsing": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test scripts/parsing.test.ts",
     "test:data": "node --conditions=react-server --import ./scripts/resolve-ts.mjs --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test scripts/data-safety.test.ts",
     "test:dashboards": "node --conditions=react-server --import ./scripts/resolve-ts.mjs --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test scripts/dashboards.test.ts",
     "test:dashboard-regressions": "node --conditions=react-server --import ./scripts/resolve-ts.mjs --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test scripts/dashboard-regressions.test.ts",
     "test:auth": "node --conditions=react-server --import ./scripts/resolve-ts.mjs --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test scripts/authorization.test.ts",
+    "test:db-isolation": "node --conditions=react-server --import ./scripts/resolve-ts.mjs --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test scripts/db-isolation.test.ts",
     "test:aps-safety": "node --conditions=react-server --import ./scripts/resolve-ts.mjs --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test scripts/aps-safety.test.ts",
     "test:archive": "node --conditions=react-server --import ./scripts/resolve-ts.mjs --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test scripts/archive.test.ts",
-    "sample-extract": "node --conditions=react-server --import ./scripts/resolve-ts.mjs --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/make-sample-extract.ts sample-extract.zip"
+    "test:audit": "node --conditions=react-server --import ./scripts/resolve-ts.mjs --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test scripts/admin-operations.test.ts scripts/project-creation.test.ts",
+    "test:health": "node --conditions=react-server --import ./scripts/resolve-ts.mjs --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test scripts/governance.test.ts scripts/project-health.test.ts",
+    "test:review-decisions": "node --conditions=react-server --import ./scripts/resolve-ts.mjs --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test scripts/review-decisions.test.ts",
+    "test:people": "node --conditions=react-server --import ./scripts/resolve-ts.mjs --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test scripts/people.test.ts",
+    "test:entities": "node --conditions=react-server --import ./scripts/resolve-ts.mjs --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test scripts/entity-profiles.test.ts",
+    "test:portfolio": "node --conditions=react-server --import ./scripts/resolve-ts.mjs --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test scripts/portfolio.test.ts",
+    "test:recipes": "node --conditions=react-server --import ./scripts/resolve-ts.mjs --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test scripts/recipes.test.ts",
+    "test:schedules": "node --conditions=react-server --import ./scripts/resolve-ts.mjs --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test scripts/data-connector-schedules.test.ts scripts/data-connector-mode.test.ts",
+    "test:data-health": "node --conditions=react-server --import ./scripts/resolve-ts.mjs --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test scripts/data-health.test.ts",
+    "test:offboarding": "node --conditions=react-server --import ./scripts/resolve-ts.mjs --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test scripts/offboarding.test.ts",
+    "test:permissions": "node --conditions=react-server --import ./scripts/resolve-ts.mjs --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test scripts/permissions.test.ts",
+    "sample-extract": "node --conditions=react-server --import ./scripts/resolve-ts.mjs --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/make-sample-extract.ts sample-extract.zip",
+    "test:integrations": "node --conditions=react-server --import ./scripts/resolve-ts.mjs --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test scripts/integrations.test.ts",
+    "test:reporting-ingest": "node --conditions=react-server --import ./scripts/resolve-ts.mjs --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test scripts/reporting-ingest.test.ts",
+    "test:closeout": "node --conditions=react-server --import ./scripts/resolve-ts.mjs --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test scripts/closeout.test.ts scripts/closeout-rules.test.ts scripts/closeout-aps.test.ts scripts/asset-handover.test.ts",
+    "test:cleanup": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test scripts/chart-legibility.test.ts scripts/checkbox-selection.test.ts scripts/project-inventory.test.ts",
+    "test:organization": "node --conditions=react-server --import ./scripts/resolve-ts.mjs --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test scripts/organization.test.ts"
   },
   "dependencies": {
     "fflate": "^0.8.3",
-    "next": "15.5.9",
-    "react": "19.1.1",
-    "react-dom": "19.1.1",
+    "next": "15.5.27",
+    "react": "19.1.9",
+    "react-dom": "19.1.9",
     "server-only": "^0.0.1"
   },
   "devDependencies": {
@@ -33,5 +50,10 @@
     "@types/react-dom": "19.1.7",
     "tailwindcss": "4.1.14",
     "typescript": "5.9.2"
+  },
+  "overrides": {
+    "postcss": "8.5.28",
+    "nanoid": "3.3.19",
+    "sharp": "0.35.5"
   }
 }

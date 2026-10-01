@@ -1,6 +1,13 @@
 import "server-only";
 
+function liveModeProblem(): string | null {
+  const mode = process.env.LENS_MODE?.trim().toLowerCase();
+  return mode && mode !== "live" ? "LENS_MODE must be live or unset in this release" : null;
+}
+
 function required(name: string): string {
+  const modeProblem = liveModeProblem();
+  if (modeProblem) throw new Error(modeProblem);
   const value = process.env[name];
   if (!value) {
     throw new Error(
@@ -47,6 +54,10 @@ export const env = {
 /** Reports config problems without throwing, so the UI can show a setup screen. */
 export function configProblems(): string[] {
   const problems: string[] = [];
+  // A leftover demo setting must fail closed rather than silently starting a
+  // real-hub deployment under a formerly synthetic configuration.
+  const modeProblem = liveModeProblem();
+  if (modeProblem) problems.push(modeProblem);
   for (const name of ["APS_CLIENT_ID", "APS_CLIENT_SECRET", "APS_CALLBACK_URL", "FORMA_HUB_ID"]) {
     if (!process.env[name]) problems.push(`${name} is not set`);
   }

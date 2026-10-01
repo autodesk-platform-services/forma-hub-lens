@@ -41,6 +41,8 @@ The full untouched row is always stored as JSON alongside, so nothing is lost an
 
 Only files matching `activities*.csv` are ingested. Other service groups still land in the extract and are recorded in `extract_files`, but they do not feed the activity views.
 
+APS can own a recurring Data Connector request and spawn future jobs. Lens stores request definitions and known job states when the user refreshes them. There is no background worker that refreshes or ingests completed jobs; ingestion remains an explicit action. An automatic ingestion service would need persistent hosting, a scheduler, a verified service identity and permissions, job de-duplication, and recovery behavior.
+
 ## Tool dashboards
 
 Each dashboard is distilled from the matching Autodesk Power BI template. KPI cards, chart types, titles, and groupings are taken from that template's hub page.
@@ -81,7 +83,9 @@ Facts join to dimensions on `bim360_project_id → admin_projects.id`, `company_
 
 ## Hub management
 
-All hub-management operations write to the live hub and need `account:write`.
+At sign-in and at least every 30 minutes while a session is used, Lens checks the signed-in Autodesk identity against the configured hub's account directory. One exact directory match with `account_admin` (Hub Admin) or `executive` (Executive Overview) can enter. Unknown roles, ambiguous identities, and failed verification are denied. This gate protects locally cached views, which Autodesk does not check on each read. A live Hub Admin check is repeated before hub administration writes and project sync. Autodesk still enforces each API's own scopes and permissions. See [`src/lib/aps/authorization.ts`](../src/lib/aps/authorization.ts).
+
+Hub-management writes need `account:write` and a Hub Admin session. The application records a preview before execution and per-item outcomes afterward in its local SQLite audit. Previews expire after ten minutes, belong to the originating session, and are single-use. Some endpoints accept work asynchronously; the audit distinguishes a submitted import from a confirmed success. It is a record of Lens actions, not a complete Autodesk account audit.
 
 ### Archiving projects
 
@@ -93,7 +97,7 @@ This operation is unusual:
 - Autodesk's [Forma compatibility table](https://aps.autodesk.com/en/docs/acc/v1/overview/bim360-compatibility/compatibility-table/) marks that endpoint **"No"** for Forma projects. The original implementation notes state that this is out of date and that the endpoint was verified against a live Forma-platform (`acc`) project on this hub: archive returned 200, the status changed, the Forma Admin API reflected it, and restoring to active worked the same way. If Autodesk ships a native Hub Admin equivalent, switch to it.
 - The endpoint is **app-only**, so it needs a two-legged token. This is the one place in the app that does not act as the signed-in user, which means Autodesk is not checking that person's permissions for this endpoint.
 
-Because of the last point, the archive action calls `requireAccountAdmin()` first. It looks the signed-in user up in the hub directory and requires `access_level === "account_admin"`. It fails closed: if the lookup errors, access is denied. Hub membership alone is not enough here, unlike everywhere else in the tool.
+Because of the last point, the archive action calls `requireAccountAdmin()` before using the app-only token. It looks the signed-in user up in the hub directory and requires `access_level === "account_admin"`. It fails closed if the lookup errors. This check is in addition to the app's Hub Admin role gate for administration writes.
 
 Additional guards:
 
@@ -130,7 +134,16 @@ src/
     activity/               Event explorer
     extracts/               Data Connector requests, jobs, ingest
     tools/                  21 tool dashboards + extract upload
-    manage/                 Bulk member / project operations
+    people/                 User profiles and access matrix from Admin CSVs
+    permissions/            Live Docs folder assignment explorer
+    governance/             Review rules and evidence
+    data-health/            Local source freshness and schema checks
+    search/                 Paginated portfolio search
+    views/                  Per-user saved filters and bookmarks
+    lifecycle/              Archive review candidates
+    offboarding/            Live account association review
+    recipes/                Project creation presets and preview
+    manage/                 Bulk operations, preview, and local audit
     actions.ts              Server actions (sync, request, ingest)
     api/aps/login|callback  OAuth 3-legged flow
     api/activity/export     Filtered CSV download
@@ -139,6 +152,15 @@ src/
   lib/
     dashboards/specs.ts     The 21 dashboard definitions  ← add KPIs/charts here
     dashboards/engine.ts    Spec -> SQL, join rules
+    people.ts               Source-aware people and membership joins
+    governance.ts           Project evidence and review rules
+    permissions.ts          Docs folder and assignment API reads
+    dataHealth.ts           Local source checks and schema baseline
+    portfolioSearch.ts      Bounded project/people/company search
+    savedViews.ts           Per-user saved filters and watchlist
+    offboarding.ts          Live account association lookup
+    recipes.ts              User-owned provisioning presets
+    adminOperations.ts      Single-use previews and item audit
     dataset.ts              Extract ZIP -> one SQLite table per CSV
     aps/hubAdmin.ts         Bulk member / project writes
     aps/auth.ts             OAuth, session, token refresh
@@ -157,7 +179,7 @@ src/
 | Purpose | Endpoint | Scope |
 | --- | --- | --- |
 | Authorize / token | `authentication/v2/authorize`, `/token` | — |
-| Hub membership gate | `GET project/v1/hubs` | `data:read` |
+| Hub role gate | `GET hq/v1/accounts/:hub/users/search` after Autodesk userinfo identity check | app-only token; exact email match |
 | Hub projects | `GET construction/admin/v1/accounts/:hub/projects` | `account:read` |
 | Create request | `POST data-connector/v1/accounts/:hub/requests` | `data:create` |
 | List jobs | `GET data-connector/v1/accounts/:hub/jobs` | `data:read` |
@@ -169,6 +191,10 @@ src/
 | Create project | `POST construction/admin/v1/accounts/:hub/projects` | `account:write` |
 | Archive project | `PATCH hq/v1/accounts/:hub/projects/:id` | `account:write` (2-legged) |
 | Admin check | `GET hq/v1/accounts/:hub/users/search` | `account:read` (2-legged) |
+| Live offboarding associations | `GET construction/admin/v1/accounts/:hub/users/:id/{projects,products,roles}` | `account:read` |
+| Docs folders and permission assignments | Data Management `topFolders`/`folders` and Docs `folders/:id/permissions` | `data:read` and signed-in user's Docs access |
+
+People, Search, Governance, Lifecycle, and Data health primarily read Lens's local SQLite cache. Permission assignments returned by Docs are not expanded into a person's effective access. Uploaded tables can represent different source periods when the user uploads ZIPs containing only some CSVs.
 
 ## UI conventions
 

@@ -48,7 +48,7 @@ function mockApi(handler: (call: Call) => { status: number; body: unknown }) {
   return calls;
 }
 
-const session = { userEmail: "admin@example.com" } as Parameters<typeof requireAccountAdmin>[0];
+const session = { mode: "live", userEmail: "admin@example.com" } as Parameters<typeof requireAccountAdmin>[0];
 
 test("admits an account admin", async () => {
   mockApi(() => ({
@@ -56,6 +56,25 @@ test("admits an account admin", async () => {
     body: [{ email: "admin@example.com", access_level: "account_admin" }],
   }));
   await requireAccountAdmin(session);
+});
+
+test("admits the documented account_admin role field", async () => {
+  mockApi(() => ({
+    status: 200,
+    body: [{ email: "admin@example.com", role: "account_admin" }],
+  }));
+  await requireAccountAdmin(session);
+});
+
+test("refuses ambiguous exact admin identities", async () => {
+  mockApi(() => ({
+    status: 200,
+    body: [
+      { email: "admin@example.com", role: "account_admin" },
+      { email: "ADMIN@example.com", role: "account_admin" },
+    ],
+  }));
+  await assert.rejects(() => requireAccountAdmin(session), NotAccountAdminError);
 });
 
 test("refuses a plain project user", async () => {
@@ -82,9 +101,19 @@ test("fails closed when the lookup errors", async () => {
 test("refuses a session with no email", async () => {
   mockApi(() => ({ status: 200, body: [] }));
   await assert.rejects(
-    () => requireAccountAdmin({ userEmail: null } as typeof session),
+    () => requireAccountAdmin({ ...session, userEmail: null }),
     NotAccountAdminError,
   );
+});
+
+test("a former demo session cannot reach the app-only admin lookup", async () => {
+  let calls = 0;
+  globalThis.fetch = (async () => { calls++; return Response.json({}); }) as typeof fetch;
+  await assert.rejects(
+    () => requireAccountAdmin({ ...session, mode: "demo" } as unknown as typeof session),
+    /live session/,
+  );
+  assert.equal(calls, 0);
 });
 
 test("recovers an admin email when userinfo failed during sign-in", async () => {
