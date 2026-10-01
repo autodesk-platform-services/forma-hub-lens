@@ -7,18 +7,10 @@ import { Card, EmptyState, Pill, formatDate, formatDateTime } from "@/components
 import { SetupRequired, SignInRequired } from "@/components/Gate";
 import { ActionForm } from "@/components/ActionForm";
 import { refreshProjects } from "../actions";
+import { serviceLabel } from "@/lib/activityPresentation";
+import { PROJECT_SORTS, projectSort, sortProjectInventory } from "@/lib/projectInventory";
 
 export const dynamic = "force-dynamic";
-
-type SortKey = "events" | "actors" | "name" | "members" | "recent";
-
-const SORTS: Array<{ key: SortKey; label: string }> = [
-  { key: "events", label: "Events" },
-  { key: "actors", label: "People" },
-  { key: "recent", label: "Last event" },
-  { key: "members", label: "Members" },
-  { key: "name", label: "Name" },
-];
 
 export default async function ProjectsPage({
   searchParams,
@@ -32,10 +24,8 @@ export default async function ProjectsPage({
   if (!session) return <SignInRequired />;
 
   const params = await searchParams;
-  const sort = (typeof params.sort === "string" ? params.sort : "events") as SortKey;
-
-  const rows = projectActivity({});
-  sortRows(rows, sort);
+  const sort = projectSort(params.sort);
+  const rows = sortProjectInventory(projectActivity({}), sort);
 
   const synced = cachedProjects();
   const totalEvents = rows.reduce((sum, row) => sum + row.events, 0);
@@ -50,14 +40,15 @@ export default async function ProjectsPage({
             {totalEvents.toLocaleString()} ingested activity events.
           </p>
         </div>
-        <ActionForm action={refreshProjects} label="Sync projects" pendingLabel="Syncing…" />
+        {session.hubRole === "hub_admin" &&
+          <ActionForm action={refreshProjects} label="Sync projects" pendingLabel="Syncing…" />}
       </div>
 
       {synced.length === 0 ? (
         <Card>
           <EmptyState title="No projects synced yet.">
             <p>
-              Press <strong>Sync projects</strong> to pull the hub project list from{" "}
+              A Hub Admin can sync the project list from{" "}
               <code>GET /construction/admin/v1/accounts/:hub/projects</code>. This needs the{" "}
               <code>account:read</code> scope and hub admin rights.
             </p>
@@ -65,27 +56,31 @@ export default async function ProjectsPage({
         </Card>
       ) : (
         <Card
-          title="Cross-project rollup"
+          title="Project inventory"
           action={
-            <div className="flex items-center gap-1 text-[11px]">
-              <span className="text-adsk-gray">Sort</span>
-              {SORTS.map((option) => (
-                <Link
+            <form action="/projects" method="get" className="flex max-w-full flex-wrap items-center gap-2 text-xs">
+              <label htmlFor="project-sort" className="text-adsk-gray">Sort projects</label>
+              <select id="project-sort" name="sort" defaultValue={sort}
+                className="max-w-full rounded border border-adsk-lightgray bg-adsk-white px-2 py-1.5 text-adsk-black">
+              {PROJECT_SORTS.map((option) => (
+                <option
                   key={option.key}
-                  href={`/projects?sort=${option.key}`}
-                  className={`rounded px-1.5 py-0.5 ${
-                    sort === option.key
-                      ? "bg-adsk-lightgray text-adsk-black"
-                      : "text-adsk-gray hover:text-adsk-black"
-                  }`}
+                  value={option.key}
                 >
                   {option.label}
-                </Link>
+                </option>
               ))}
-            </div>
+              </select>
+              <button type="submit" className="rounded border border-adsk-lightgray px-2 py-1.5 hover:bg-adsk-offwhite">Apply</button>
+            </form>
           }
           className="overflow-hidden"
         >
+          <p className="mb-3 max-w-4xl text-xs leading-relaxed text-adsk-gray">
+            <strong className="text-adsk-black">Project members</strong> counts assigned memberships in the synced administration data.
+            {" "}<strong className="text-adsk-black">Active people (observed)</strong> counts distinct activity identities in the ingested window, including unresolved identities.
+            {" "}No observed activity means no events in that window; it does not establish that a project is inactive. Unknown values appear last when sorting counts or dates.
+          </p>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
               <thead className="text-[11px] uppercase tracking-wide text-adsk-gray">
@@ -93,10 +88,10 @@ export default async function ProjectsPage({
                   <th className="py-2 pr-3 font-medium">Project</th>
                   <th className="py-2 pr-3 font-medium">Status</th>
                   <th className="py-2 pr-3 text-right font-medium">Events</th>
-                  <th className="py-2 pr-3 text-right font-medium">People</th>
-                  <th className="py-2 pr-3 font-medium">Last event</th>
-                  <th className="py-2 pr-3 font-medium">Services</th>
-                  <th className="py-2 pr-3 text-right font-medium">Members</th>
+                  <th className="py-2 pr-3 text-right font-medium">Active people (observed)</th>
+                  <th className="py-2 pr-3 font-medium">Last observed activity</th>
+                  <th className="py-2 pr-3 font-medium">Observed services</th>
+                  <th className="py-2 pr-3 text-right font-medium">Project members</th>
                   <th className="py-2 pr-3 text-right font-medium">Sheets</th>
                   <th className="py-2 pr-3 font-medium">Last sign-in</th>
                 </tr>
@@ -106,7 +101,7 @@ export default async function ProjectsPage({
                   <tr key={row.projectId} className="border-b border-adsk-offwhite hover:bg-adsk-offwhite">
                     <td className="max-w-[22rem] py-2 pr-3">
                       <Link
-                        href={`/activity?project=${encodeURIComponent(row.projectId)}`}
+                        href={`/projects/${encodeURIComponent(row.projectId)}`}
                         className="block truncate text-adsk-black hover:text-adsk-link"
                         title={row.name}
                       >
@@ -131,11 +126,11 @@ export default async function ProjectsPage({
                       )}
                     </td>
                     <td className="py-2 pr-3 text-right text-adsk-black">
-                      {row.actors > 0 ? row.actors.toLocaleString() : "—"}
+                      {row.actors.toLocaleString()}
                     </td>
                     <td className="py-2 pr-3 text-adsk-black">{formatDateTime(row.lastEventMs)}</td>
                     <td className="max-w-[14rem] truncate py-2 pr-3 text-adsk-gray" title={row.services ?? ""}>
-                      {row.services ?? "—"}
+                      {row.services ? row.services.split(",").map(serviceLabel).join(", ") : "—"}
                     </td>
                     <td className="py-2 pr-3 text-right text-adsk-black">
                       {row.memberCount ?? "—"}
@@ -151,32 +146,4 @@ export default async function ProjectsPage({
       )}
     </div>
   );
-}
-
-function sortRows(
-  rows: Array<{
-    events: number;
-    actors: number;
-    name: string;
-    memberCount: number | null;
-    lastEventMs: number | null;
-  }>,
-  sort: SortKey,
-): void {
-  switch (sort) {
-    case "actors":
-      rows.sort((a, b) => b.actors - a.actors || a.name.localeCompare(b.name));
-      break;
-    case "name":
-      rows.sort((a, b) => a.name.localeCompare(b.name));
-      break;
-    case "members":
-      rows.sort((a, b) => (b.memberCount ?? -1) - (a.memberCount ?? -1));
-      break;
-    case "recent":
-      rows.sort((a, b) => (b.lastEventMs ?? 0) - (a.lastEventMs ?? 0));
-      break;
-    default:
-      rows.sort((a, b) => b.events - a.events || a.name.localeCompare(b.name));
-  }
 }

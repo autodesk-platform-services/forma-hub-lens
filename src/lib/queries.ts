@@ -2,6 +2,8 @@ import "server-only";
 
 import { getDb } from "./db";
 import { projectNameMap } from "./aps/admin";
+import { resolveUserIdentities } from "./entityProfiles";
+import { actionLabel, actorDisplay, serviceLabel } from "./activityPresentation";
 
 export type ActivityFilters = {
   from?: string; // ISO date (inclusive)
@@ -70,8 +72,11 @@ export type ActivityRow = {
   occurredMs: number | null;
   projectId: string | null;
   projectName: string;
+  actorId: string | null;
   actorName: string | null;
   actorEmail: string | null;
+  actorResolvedName: string | null;
+  actorResolvedId: string | null;
   service: string | null;
   action: string | null;
   targetType: string | null;
@@ -95,13 +100,15 @@ export function listActivities(
 
   const rows = db
     .prepare(
-      `SELECT id, occurred_at, occurred_ms, project_id, actor_name, actor_email,
+      `SELECT id, occurred_at, occurred_ms, project_id, actor_id, actor_name, actor_email,
               service, action, target_type, target_name, raw
        FROM activities ${where.sql}
        ORDER BY occurred_ms DESC NULLS LAST, id DESC
        LIMIT ? OFFSET ?`,
     )
     .all(...where.params, page.limit, page.offset) as Array<Record<string, string | number | null>>;
+  const identities = resolveUserIdentities(rows.flatMap((row) =>
+    [row.actor_id, row.actor_name].filter((value): value is string => typeof value === "string" && Boolean(value))));
 
   return {
     total,
@@ -124,8 +131,11 @@ export function listActivities(
         occurredMs: row.occurred_ms === null ? null : Number(row.occurred_ms),
         projectId,
         projectName: projectId ? (names.get(projectId) ?? shortId(projectId)) : "—",
+        actorId: row.actor_id as string | null,
         actorName: row.actor_name as string | null,
         actorEmail: row.actor_email as string | null,
+        actorResolvedName: identities.get(String(row.actor_id ?? ""))?.name ?? identities.get(String(row.actor_name ?? ""))?.name ?? null,
+        actorResolvedId: identities.get(String(row.actor_id ?? ""))?.sourceId ?? identities.get(String(row.actor_name ?? ""))?.sourceId ?? null,
         service: row.service as string | null,
         action: row.action as string | null,
         targetType: row.target_type as string | null,
@@ -194,14 +204,21 @@ export function topActors(filters: ActivityFilters, limit = 12): Bucket[] {
     .prepare(
       `SELECT COALESCE(NULLIF(actor_name, ''), NULLIF(actor_email, ''), NULLIF(actor_id, ''), '(unknown)') AS k,
               COALESCE(NULLIF(actor_email, ''), '') AS email,
+              COALESCE(NULLIF(actor_id, ''), '') AS actor_id,
               COUNT(*) AS n
        FROM activities ${where.sql}
-       GROUP BY k, email ORDER BY n DESC LIMIT ?`,
+       GROUP BY k, email, actor_id ORDER BY n DESC LIMIT ?`,
     )
-    .all(...where.params, limit) as Array<{ k: string; email: string; n: number }>;
+    .all(...where.params, limit) as Array<{ k: string; email: string; actor_id: string; n: number }>;
+  const identities = resolveUserIdentities(rows.flatMap((row) => [row.actor_id, row.k].filter(Boolean)));
   return rows.map((row) => ({
-    key: row.email || row.k,
-    label: row.k,
+    key: row.email || row.actor_id || row.k,
+    label: (() => {
+      const display = actorDisplay(row.k, row.email || null, row.actor_id || null,
+        identities.get(row.actor_id)?.name ?? identities.get(row.k)?.name);
+      return display.label === "Unknown person" || display.label === "Unresolved actor"
+        ? `${display.label} · ${shortId(row.actor_id || row.k)}` : display.label;
+    })(),
     count: Number(row.n),
   }));
 }
@@ -209,7 +226,7 @@ export function topActors(filters: ActivityFilters, limit = 12): Bucket[] {
 export function topServices(filters: ActivityFilters, limit = 12): Bucket[] {
   return groupBy("service", filters, limit).map((row) => ({
     key: row.key,
-    label: row.key,
+    label: serviceLabel(row.key),
     count: row.count,
   }));
 }
@@ -217,7 +234,7 @@ export function topServices(filters: ActivityFilters, limit = 12): Bucket[] {
 export function topActions(filters: ActivityFilters, limit = 15): Bucket[] {
   return groupBy("action", filters, limit).map((row) => ({
     key: row.key,
-    label: row.key,
+    label: actionLabel(row.key),
     count: row.count,
   }));
 }

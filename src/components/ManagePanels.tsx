@@ -1,6 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState, useState } from "react";
+import type { MemberFollowUpPreset } from "@/lib/recipes";
+import { CheckboxList } from "@/components/CheckboxList";
 import {
   bulkAddMembers,
   bulkArchiveProjects,
@@ -11,19 +14,43 @@ import {
 
 type Project = { id: string; name: string; status: string | null };
 type Company = { id: string; name: string };
+type AssignableRole = { id: string; name: string; projectIds: string[] };
 
 const label = "block font-legend text-[10px] uppercase tracking-wide text-adsk-gray";
 const input =
   "mt-1 w-full rounded border border-adsk-lightgray bg-adsk-white px-2.5 py-1.5 text-xs text-adsk-black focus:border-adsk-blue focus:outline-none";
 const mono = input + " font-mono";
 
-function Result({ state }: { state: ManageState }) {
+function Result({ state, pending }: { state: ManageState; pending: boolean }) {
   if (!state) return null;
   return (
-    <div className="mt-3">
+    <div className="mt-3 space-y-2">
       <p className={`text-xs ${state.ok ? "text-adsk-black" : "text-adsk-linkvisited"}`}>
         {state.message}
       </p>
+      {state.preview && (
+        <div className="rounded border border-adsk-gold bg-adsk-gold/10 p-3 text-xs text-adsk-black">
+          <p className="font-semibold">Review the stored preview</p>
+          <p className="mt-1">
+            {state.preview.planned} planned change(s) · {state.preview.skipped} skipped · expires at{" "}
+            {new Date(state.preview.expiresAt).toLocaleTimeString()}
+          </p>
+          <p className="mt-1 text-adsk-gray">If you change any fields above, preview again before confirming.</p>
+          <a href={`/manage/preview/${state.preview.id}/export`} className="mt-1 inline-block text-adsk-link hover:underline">
+            Export full preview CSV
+          </a>
+          <input type="hidden" name="planId" value={state.preview.id} />
+          <button
+            type="submit"
+            name="intent"
+            value="execute"
+            disabled={pending}
+            className="mt-2 rounded border border-adsk-black bg-adsk-black px-3 py-1.5 font-legend text-xs text-adsk-white hover:opacity-90 disabled:opacity-50"
+          >
+            {pending ? "Executing…" : "Confirm and execute this preview"}
+          </button>
+        </div>
+      )}
       {state.detail && state.detail.length > 0 && (
         <ul className="mt-1.5 max-h-40 space-y-0.5 overflow-auto rounded bg-adsk-offwhite p-2">
           {state.detail.map((line, index) => (
@@ -33,57 +60,50 @@ function Result({ state }: { state: ManageState }) {
           ))}
         </ul>
       )}
+      {state.operationId && (
+        <Link href={`/manage/audit/${state.operationId}`} className="inline-block text-xs text-adsk-link hover:underline">
+          View full operation record →
+        </Link>
+      )}
     </div>
   );
 }
 
 function ProjectPicker({ projects }: { projects: Project[] }) {
-  const [filter, setFilter] = useState("");
-  const shown = projects.filter((p) =>
-    p.name.toLowerCase().includes(filter.trim().toLowerCase()),
-  );
-  return (
-    <div>
-      <label className={label} htmlFor="projectFilter">
-        Projects <span className="normal-case">(ctrl-click for several)</span>
-      </label>
-      <input
-        id="projectFilter"
-        className={input}
-        placeholder="Filter by name…"
-        value={filter}
-        onChange={(event) => setFilter(event.target.value)}
-      />
-      <select name="projectIds" multiple size={7} className={`${input} h-auto`}>
-        {shown.map((project) => (
-          <option key={project.id} value={project.id}>
-            {project.name}
-            {project.status && project.status !== "active" ? ` (${project.status})` : ""}
-          </option>
-        ))}
-      </select>
-      <p className="mt-1 text-[10px] text-adsk-gray">
-        {shown.length} of {projects.length} projects shown
-      </p>
-    </div>
-  );
+  return <CheckboxList label="Projects" name="projectIds" maxSelected={50} className="max-h-48" options={projects.map((project) => ({
+    value: project.id,
+    label: project.name + (project.status && project.status !== "active" ? ` (${project.status})` : ""),
+  }))} />;
 }
 
 export function AddMembersPanel({
   projects,
   companies,
   productOptions,
+  roleOptions = [],
+  roleSourceReady = false,
+  preset,
 }: {
   projects: Project[];
   companies: Company[];
   productOptions: Array<{ label: string; keys: string[]; note?: string }>;
+  roleOptions?: AssignableRole[];
+  roleSourceReady?: boolean;
+  preset?: MemberFollowUpPreset | null;
 }) {
   const [state, action, pending] = useActionState<ManageState, FormData>(bulkAddMembers, null);
+  const [selectedProducts, setSelectedProducts] = useState<string[]>(preset?.productLabels ?? []);
 
   return (
     <form action={action} className="space-y-4">
+      {preset && (
+        <p className="rounded border border-adsk-gold bg-adsk-gold/10 px-3 py-2 text-xs text-adsk-black">
+          Loaded the current saved member and product defaults from <strong>{preset.name}</strong>. After project creation finishes,
+          sync projects and select the active projects below. Review the values and run a preview before any import is sent.
+        </p>
+      )}
       <div className="grid gap-4 md:grid-cols-2">
-        <ProjectPicker projects={projects} />
+        <ProjectPicker projects={preset ? projects.filter((project) => project.status === "active") : projects} />
 
         <div>
           <label className={label} htmlFor="members">
@@ -93,6 +113,7 @@ export function AddMembersPanel({
             id="members"
             name="members"
             rows={7}
+            defaultValue={preset?.memberEmails.join("\n") ?? ""}
             className={mono}
             placeholder={"jane.doe@example.com, Jane, Doe\njohn.smith@example.com"}
           />
@@ -101,6 +122,11 @@ export function AddMembersPanel({
 
       <fieldset>
         <legend className={label}>Choose product access…</legend>
+        <div className="mt-1 flex gap-2 text-[11px]">
+          <button type="button" onClick={() => setSelectedProducts(productOptions.map((option) => option.label))} className="text-adsk-link hover:underline">Select all products</button>
+          <button type="button" onClick={() => setSelectedProducts([])} className="text-adsk-link hover:underline">Clear</button>
+          <span className="text-adsk-gray">{selectedProducts.length} selected</span>
+        </div>
         <div className="mt-2 flex flex-wrap gap-2">
           {productOptions.map((option) => (
             <label
@@ -108,19 +134,31 @@ export function AddMembersPanel({
               title={option.note ? `${option.note} (${option.keys.join(", ")})` : option.keys.join(", ")}
               className="flex cursor-pointer items-center gap-1.5 rounded border border-adsk-lightgray bg-adsk-white px-2.5 py-1.5 text-xs text-adsk-black hover:border-adsk-blue has-checked:border-adsk-yellow"
             >
-              <input type="checkbox" name="products" value={option.label} className="accent-adsk-yellow" />
+              <input type="checkbox" name="products" value={option.label}
+                checked={selectedProducts.includes(option.label)}
+                onChange={() => setSelectedProducts((current) => current.includes(option.label)
+                  ? current.filter((label) => label !== option.label) : [...current, option.label])}
+                className="accent-adsk-yellow" />
               {option.label}
             </label>
           ))}
         </div>
       </fieldset>
 
+      <div>
+        {roleSourceReady && roleOptions.length > 0 ? <>
+          <CheckboxList label="Roles for new members (optional)" name="roleIds" className="max-h-40" maxSelected={20} limitNoun="roles"
+            options={roleOptions.map((role) => ({ value: role.id, label: `${role.name} (${role.projectIds.length} projects in snapshot)` }))} />
+          <p className="mt-1 text-[11px] text-adsk-gray">Only active roles from a Lens-ingested APS Data Connector admin extract are offered. Each selected role must appear on every selected project. Existing project members are skipped and their roles are not changed.</p>
+        </> : <p className="text-[11px] text-adsk-gray">Role assignment is available after a trusted, complete APS Data Connector admin extract is ingested. The Roles tab can still be browsed from uploaded snapshots.</p>}
+      </div>
+
       <div className="grid gap-4 md:grid-cols-3">
         <div>
           <label className={label} htmlFor="accessLevel">
             Access level
           </label>
-          <select id="accessLevel" name="accessLevel" className={input} defaultValue="member">
+          <select id="accessLevel" name="accessLevel" className={input} defaultValue={preset?.memberAccessLevel ?? "member"}>
             <option value="member">Member</option>
             <option value="administrator">Administrator</option>
           </select>
@@ -139,7 +177,9 @@ export function AddMembersPanel({
           </select>
         </div>
         <label className="flex items-end gap-2 pb-1.5 text-xs text-adsk-black">
-          <input type="checkbox" name="suppressEmails" className="accent-adsk-yellow" />
+          <input type="checkbox" name="suppressEmails"
+            defaultChecked={preset?.suppressInvitationEmails ?? false}
+            className="accent-adsk-yellow" />
           Suppress invitation emails
         </label>
       </div>
@@ -149,9 +189,9 @@ export function AddMembersPanel({
         disabled={pending}
         className="rounded border border-adsk-lightgray bg-adsk-yellow px-3 py-1.5 font-legend text-xs text-adsk-black hover:opacity-90 disabled:opacity-50"
       >
-        {pending ? "Submitting…" : "Add members"}
+        {pending ? "Previewing…" : "Preview additions"}
       </button>
-      <Result state={state} />
+      <Result state={state} pending={pending} />
     </form>
   );
 }
@@ -178,7 +218,7 @@ export function RemoveMembersPanel({ projects }: { projects: Project[] }) {
 
       <div className="max-w-xs">
         <label className={label} htmlFor="confirm">
-          Type REMOVE to confirm
+          Type REMOVE to preview
         </label>
         <input id="confirm" name="confirm" className={input} autoComplete="off" />
       </div>
@@ -188,9 +228,9 @@ export function RemoveMembersPanel({ projects }: { projects: Project[] }) {
         disabled={pending}
         className="rounded border border-adsk-linkvisited px-3 py-1.5 font-legend text-xs text-adsk-linkvisited hover:bg-adsk-linkvisited hover:text-adsk-white disabled:opacity-50"
       >
-        {pending ? "Removing…" : "Remove members"}
+        {pending ? "Previewing…" : "Preview removal"}
       </button>
-      <Result state={state} />
+      <Result state={state} pending={pending} />
     </form>
   );
 }
@@ -200,6 +240,11 @@ export function CreateProjectsPanel({ projectTypes }: { projectTypes: string[] }
 
   return (
     <form action={action} className="space-y-4">
+      <div className="flex flex-wrap items-center gap-3 rounded border border-adsk-lightgray bg-adsk-offwhite p-3 text-xs">
+        <strong>Start blank</strong>
+        <span className="text-adsk-gray">or</span>
+        <Link href="/recipes" className="text-adsk-link underline">Create from a recipe →</Link>
+      </div>
       <div>
         <label className={label} htmlFor="projects">
           Projects — one per line: <code>Name, Type, JobNumber</code> (type and job number optional)
@@ -242,38 +287,47 @@ export function CreateProjectsPanel({ projectTypes }: { projectTypes: string[] }
         disabled={pending}
         className="rounded border border-adsk-lightgray bg-adsk-yellow px-3 py-1.5 font-legend text-xs text-adsk-black hover:opacity-90 disabled:opacity-50"
       >
-        {pending ? "Creating…" : "Create projects"}
+        {pending ? "Previewing…" : "Preview project creation"}
       </button>
-      <Result state={state} />
+      <Result state={state} pending={pending} />
     </form>
   );
 }
 
 export function Tabs({
   tabs,
+  defaultActive,
+  links = [],
 }: {
-  tabs: Array<{ id: string; label: string; content: React.ReactNode }>;
+  tabs: Array<{ id: string; label: string; group: string; content: React.ReactNode }>;
+  defaultActive?: string;
+  links?: Array<{ group: string; label: string; href: string }>;
 }) {
-  const [active, setActive] = useState(tabs[0]?.id);
+  const [active, setActive] = useState(tabs.find((tab) => tab.id === defaultActive)?.id ?? tabs[0]?.id);
+  const groups = [...new Set([...tabs.map((tab) => tab.group), ...links.map((link) => link.group)])];
   return (
-    <div>
-      <div className="flex flex-wrap gap-1 border-b border-adsk-lightgray">
-        {tabs.map((tab) => (
-          <button
-            key={tab.id}
-            type="button"
-            onClick={() => setActive(tab.id)}
-            className={`-mb-px border-b-2 px-3 py-2 font-legend text-xs ${
-              active === tab.id
-                ? "border-adsk-yellow text-adsk-black"
-                : "border-transparent text-adsk-gray hover:text-adsk-black"
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
-      <div className="pt-5">{tabs.find((tab) => tab.id === active)?.content}</div>
+    <div className="grid gap-6 lg:grid-cols-[14rem_minmax(0,1fr)]">
+      <nav aria-label="Admin actions" className="space-y-4 border-b border-adsk-lightgray pb-4 lg:border-b-0 lg:border-r lg:pb-0 lg:pr-4">
+        {groups.map((group) => <div key={group}>
+          <h2 className="mb-1 font-legend text-[11px] uppercase tracking-wide text-adsk-gray">{group}</h2>
+          <div className="flex flex-wrap gap-1 lg:block">
+            {tabs.filter((tab) => tab.group === group).map((tab) => <button key={tab.id} type="button"
+              onClick={() => setActive(tab.id)} aria-current={active === tab.id ? "page" : undefined}
+              className={`rounded px-3 py-2 text-left font-legend text-xs lg:block lg:w-full ${active === tab.id
+                ? "bg-adsk-yellow text-adsk-black" : "text-adsk-gray hover:bg-adsk-offwhite hover:text-adsk-black"}`}>
+              {tab.label}
+            </button>)}
+            {links.filter((link) => link.group === group).map((link) => <Link key={link.href} href={link.href}
+              className="rounded px-3 py-2 text-left font-legend text-xs text-adsk-gray hover:bg-adsk-offwhite hover:text-adsk-black lg:block lg:w-full">
+              {link.label} ↗
+            </Link>)}
+          </div>
+        </div>)}
+      </nav>
+      <section aria-label={tabs.find((tab) => tab.id === active)?.label} className="min-w-0">
+        <h2 className="font-legend text-base text-adsk-black">{tabs.find((tab) => tab.id === active)?.label}</h2>
+        <div className="pt-4">{tabs.find((tab) => tab.id === active)?.content}</div>
+      </section>
     </div>
   );
 }
@@ -288,14 +342,9 @@ export function ArchiveProjectsPanel({ projects }: { projects: Project[] }) {
     bulkArchiveProjects,
     null,
   );
-  const [filter, setFilter] = useState("");
   const [selected, setSelected] = useState<string[]>([]);
 
   const active = projects.filter((p) => p.status === "active");
-  const shown = active.filter((p) => p.name.toLowerCase().includes(filter.trim().toLowerCase()));
-
-  const toggle = (id: string) =>
-    setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
 
   return (
     <form action={action} className="space-y-4">
@@ -307,43 +356,10 @@ export function ArchiveProjectsPanel({ projects }: { projects: Project[] }) {
 
       <div className="grid gap-4 md:grid-cols-2">
         <div>
-          <label className={label} htmlFor="archiveFilter">
-            Active projects{" "}
-            <span className="normal-case">({active.length} of {projects.length})</span>
-          </label>
-          <input
-            id="archiveFilter"
-            className={input}
-            placeholder="Filter by name…"
-            value={filter}
-            onChange={(event) => setFilter(event.target.value)}
-          />
-          <div className="mt-1 max-h-56 overflow-auto rounded border border-adsk-lightgray bg-adsk-white">
-            {shown.length === 0 ? (
-              <p className="px-2.5 py-2 text-[11px] text-adsk-gray">No active projects match.</p>
-            ) : (
-              <ul>
-                {shown.map((project) => (
-                  <li key={project.id}>
-                    <label className="flex cursor-pointer items-center gap-2 border-b border-adsk-offwhite px-2.5 py-1.5 text-xs text-adsk-black last:border-b-0 hover:bg-adsk-offwhite">
-                      <input
-                        type="checkbox"
-                        name="projectIds"
-                        value={project.id}
-                        checked={selected.includes(project.id)}
-                        onChange={() => toggle(project.id)}
-                        className="accent-adsk-yellow"
-                      />
-                      <span className="truncate">{project.name}</span>
-                    </label>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-          <p className="mt-1 text-[10px] text-adsk-gray">
-            {shown.length} shown · <strong>{selected.length} selected</strong>
-          </p>
+          <CheckboxList label={`Active projects (${active.length} of ${projects.length})`} name="projectIds"
+            options={active.map((project) => ({ value: project.id, label: project.name }))}
+            selected={selected} onSelectionChange={setSelected} maxSelected={50}
+            emptyMessage="No active projects match." />
         </div>
 
         <div className="space-y-3">
@@ -368,7 +384,7 @@ export function ArchiveProjectsPanel({ projects }: { projects: Project[] }) {
 
           <div className="max-w-xs">
             <label className={label} htmlFor="archiveConfirm">
-              Type ARCHIVE to confirm
+              Type ARCHIVE to preview
             </label>
             <input id="archiveConfirm" name="confirm" className={input} autoComplete="off" />
           </div>
@@ -382,23 +398,14 @@ export function ArchiveProjectsPanel({ projects }: { projects: Project[] }) {
           className="rounded border border-adsk-lightgray bg-adsk-yellow px-3 py-1.5 font-legend text-xs text-adsk-black hover:opacity-90 disabled:opacity-50"
         >
           {pending
-            ? "Archiving…"
-            : `Archive ${selected.length || ""} project${selected.length === 1 ? "" : "s"}`.trim()}
+            ? "Previewing…"
+            : `Preview ${selected.length || ""} project${selected.length === 1 ? "" : "s"}`.trim()}
         </button>
-        {selected.length > 0 && (
-          <button
-            type="button"
-            onClick={() => setSelected([])}
-            className="text-xs text-adsk-gray hover:text-adsk-black"
-          >
-            Clear selection
-          </button>
-        )}
         <span className="text-[10px] text-adsk-gray">
           Requires Autodesk account administrator rights · max 50 per run
         </span>
       </div>
-      <Result state={state} />
+      <Result state={state} pending={pending} />
     </form>
   );
 }

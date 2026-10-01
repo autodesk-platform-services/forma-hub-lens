@@ -1,9 +1,17 @@
 import "server-only";
 
-import { env } from "../env";
+import { configProblems, env } from "../env";
 import type { Session } from "./auth";
 
 export const APS_BASE = "https://developer.api.autodesk.com";
+
+/** This boundary covers all APS calls routed through apsFetch, including absolute URLs. */
+export function requireLiveApsSession(session: Pick<Session, "mode">): void {
+  if (configProblems().length) throw new Error("Live Autodesk hub configuration is incomplete.");
+  if (session.mode !== "live") {
+    throw new Error("Live Autodesk hub APIs require a live session.");
+  }
+}
 
 export class ApsError extends Error {
   // Assigned in the body rather than via parameter properties: those need a
@@ -44,6 +52,7 @@ type ApsFetchOptions = {
   /** Send the Region header, which Forma Admin endpoints accept. */
   regional?: boolean;
   searchParams?: Record<string, string | number | undefined>;
+  timeoutMs?: number;
 };
 
 /**
@@ -58,6 +67,7 @@ export async function apsFetch<T>(
   path: string,
   options: ApsFetchOptions = {},
 ): Promise<T> {
+  requireLiveApsSession(session);
   const url = new URL(path.startsWith("http") ? path : `${APS_BASE}${path}`);
   for (const [key, value] of Object.entries(options.searchParams ?? {})) {
     if (value !== undefined && value !== "") url.searchParams.set(key, String(value));
@@ -80,6 +90,7 @@ export async function apsFetch<T>(
       headers,
       body: options.body === undefined ? undefined : JSON.stringify(options.body),
       cache: "no-store",
+      ...(options.timeoutMs ? { signal: AbortSignal.timeout(options.timeoutMs) } : {}),
     });
 
     if (res.ok) {
@@ -112,6 +123,7 @@ export async function apsPaginate<T>(
   const limit = options.limit ?? 100;
   const maxPages = options.maxPages ?? 100;
   const collected: T[] = [];
+  let offset = 0;
 
   for (let page = 0; page < maxPages; page++) {
     const body = await apsFetch<{
@@ -119,15 +131,27 @@ export async function apsPaginate<T>(
       pagination?: { totalResults?: number; limit?: number; offset?: number };
     }>(session, path, {
       ...options,
-      searchParams: { ...options.searchParams, limit, offset: page * limit },
+      searchParams: { ...options.searchParams, limit, offset },
     });
 
-    const results = body.results ?? [];
+    if (!body || !Array.isArray(body.results)) {
+      throw new Error(`APS returned an unreadable paginated response for ${path}.`);
+    }
+    const results = body.results;
     collected.push(...results);
-    if (results.length < limit) break;
     const total = body.pagination?.totalResults;
-    if (typeof total === "number" && collected.length >= total) break;
+    const knownTotal = typeof total === "number" && Number.isFinite(total) && total >= 0
+      ? total : null;
+    if (knownTotal !== null && collected.length >= knownTotal) return collected;
+    if (results.length === 0) {
+      if (knownTotal !== null && collected.length < knownTotal) {
+        throw new Error(`APS pagination ended before all ${knownTotal} records were returned for ${path}.`);
+      }
+      return collected;
+    }
+    if (results.length < limit && knownTotal === null) return collected;
+    offset += results.length;
   }
 
-  return collected;
+  throw new Error(`APS pagination exceeded ${maxPages} pages for ${path}; refresh was not applied.`);
 }

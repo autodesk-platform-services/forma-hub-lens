@@ -1,9 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ChartCard, formatValue } from "./charts";
 import type { ChartResult, KpiResult } from "@/lib/dashboards/engine";
+import { readToolFavorites } from "@/lib/toolFavorites";
 
 export type ToolCard = {
   id: string;
@@ -30,56 +31,110 @@ export function ToolsExplorer({
   tools,
   datasetTables,
   datasetRows,
+  favoritesKey,
 }: {
   tools: ToolCard[];
   datasetTables: number;
   datasetRows: number;
+  favoritesKey: string | null;
 }) {
   const [openId, setOpenId] = useState<string | null>(null);
   const [dashboard, setDashboard] = useState<Dashboard | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const dialogRef = useRef<HTMLDialogElement>(null);
+  const activeOpenId = useRef<string | null>(null);
+  const requestSequence = useRef(0);
+  const [favorites, setFavorites] = useState<string[]>([]);
+  const router = useRouter();
+  const pathname = usePathname();
+  const requestedOpenId = useSearchParams().get("open");
+
+  const replaceOpenParam = useCallback((id: string | null) => {
+    const params = new URLSearchParams(window.location.search);
+    if (id) params.set("open", id);
+    else params.delete("open");
+    const query = params.toString();
+    const href = `${pathname}${query ? `?${query}` : ""}`;
+    if (href !== `${window.location.pathname}${window.location.search}`) {
+      router.replace(href, { scroll: false });
+    }
+  }, [pathname, router]);
 
   const close = useCallback(() => {
-    dialogRef.current?.close();
+    activeOpenId.current = null;
+    requestSequence.current += 1;
+    if (dialogRef.current?.open) dialogRef.current.close();
     setOpenId(null);
     setDashboard(null);
+    setLoading(false);
     setError(null);
-  }, []);
+    replaceOpenParam(null);
+  }, [replaceOpenParam]);
 
   const open = useCallback(async (tool: ToolCard) => {
+    if (activeOpenId.current === tool.id && dialogRef.current?.open) return;
+    activeOpenId.current = tool.id;
+    const requestId = ++requestSequence.current;
     setOpenId(tool.id);
     setDashboard(null);
     setError(null);
     setLoading(true);
-    dialogRef.current?.showModal();
+    if (dialogRef.current && !dialogRef.current.open) dialogRef.current.showModal();
     try {
       const res = await fetch(`/api/dashboards/${tool.id}`, { cache: "no-store" });
       const body = await res.json();
+      if (requestId !== requestSequence.current) return;
       if (!res.ok) throw new Error(body.error ?? `HTTP ${res.status}`);
       setDashboard(body as Dashboard);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
+      if (requestId === requestSequence.current) {
+        setError(cause instanceof Error ? cause.message : String(cause));
+      }
     } finally {
-      setLoading(false);
+      if (requestId === requestSequence.current) setLoading(false);
     }
   }, []);
+
+  const openFromCard = useCallback((tool: ToolCard) => {
+    void open(tool);
+    replaceOpenParam(tool.id);
+  }, [open, replaceOpenParam]);
+
+  useEffect(() => {
+    setFavorites(readToolFavorites(favoritesKey, new Set(tools.map((tool) => tool.id))));
+  }, [favoritesKey, tools]);
+
+  useEffect(() => {
+    const tool = tools.find((candidate) => candidate.id === requestedOpenId);
+    if (tool) void open(tool);
+    else if (activeOpenId.current !== null) close();
+  }, [close, open, requestedOpenId, tools]);
+
+  const toggleFavorite = (id: string) => {
+    if (!favoritesKey) return;
+    const next = favorites.includes(id) ? favorites.filter((item) => item !== id) : [...favorites, id];
+    setFavorites(next);
+    try { window.localStorage.setItem(favoritesKey, JSON.stringify(next)); } catch { /* Browser storage unavailable. */ }
+  };
 
   // Native <dialog> gives Esc-to-dismiss; keep React state in step with it.
   useEffect(() => {
     const dialog = dialogRef.current;
     if (!dialog) return;
     const onClose = () => {
-      setOpenId(null);
-      setDashboard(null);
+      if (activeOpenId.current !== null) close();
     };
     dialog.addEventListener("close", onClose);
     return () => dialog.removeEventListener("close", onClose);
-  }, []);
+  }, [close]);
 
   const enabled = tools.filter((t) => t.enabled);
-  const disabled = tools.filter((t) => !t.enabled);
+  const favoriteTools = favorites.flatMap((id) => {
+    const tool = tools.find((candidate) => candidate.id === id);
+    return tool ? [tool] : [];
+  });
+  const assigned = new Set(TOOL_CATEGORIES.flatMap((category) => category.ids));
 
   return (
     <>
@@ -89,33 +144,43 @@ export function ToolsExplorer({
           tools enabled
         </span>
         <span>
-          {datasetTables.toLocaleString()} tables · {datasetRows.toLocaleString()} rows loaded
+          {datasetTables.toLocaleString()} loaded tables · {datasetRows.toLocaleString()} rows loaded
         </span>
       </div>
 
-      <ToolGrid tools={enabled} onOpen={open} />
-
-      {disabled.length > 0 && (
-        <>
-          <h2 className="mt-8 mb-3 font-legend text-sm text-adsk-black">
-            Not enabled — missing source CSVs
-          </h2>
-          <ToolGrid tools={disabled} onOpen={open} />
-        </>
-      )}
+      {favoriteTools.length > 0 && <section className="mb-7">
+        <h2 className="mb-3 font-legend text-sm text-adsk-black">★ My tools</h2>
+        <ToolGrid tools={favoriteTools} onOpen={openFromCard} favorites={favorites} onToggleFavorite={toggleFavorite} canFavorite={Boolean(favoritesKey)} />
+      </section>}
+      {TOOL_CATEGORIES.map((category) => {
+        const group = category.ids.flatMap((id) => {
+          const tool = tools.find((candidate) => candidate.id === id);
+          return tool ? [tool] : [];
+        });
+        return group.length ? <section key={category.name} className="mb-7">
+          <h2 className="mb-3 font-legend text-sm text-adsk-black">{category.name}</h2>
+          <ToolGrid tools={group} onOpen={openFromCard} favorites={favorites} onToggleFavorite={toggleFavorite} canFavorite={Boolean(favoritesKey)} />
+        </section> : null;
+      })}
+      {tools.some((tool) => !assigned.has(tool.id)) && <section className="mb-7">
+        <h2 className="mb-3 font-legend text-sm text-adsk-black">Other tools</h2>
+          <ToolGrid tools={tools.filter((tool) => !assigned.has(tool.id))} onOpen={openFromCard} favorites={favorites}
+          onToggleFavorite={toggleFavorite} canFavorite={Boolean(favoritesKey)} />
+      </section>}
 
       <dialog
         ref={dialogRef}
+        aria-labelledby="tool-dashboard-title"
         className="m-0 h-full max-h-none w-full max-w-none bg-transparent p-0 backdrop:bg-black/60"
         onClick={(event) => {
           if (event.target === dialogRef.current) close();
         }}
       >
-        <div className="flex h-[100dvh] w-full items-center justify-center p-3 sm:p-5">
-          <div className="flex h-full w-full flex-col overflow-hidden rounded-lg bg-adsk-offwhite shadow-2xl">
-            <header className="surface-dark flex shrink-0 items-start justify-between gap-4 px-6 py-4">
+        <div className="flex h-[100dvh] w-full items-center justify-center p-2 sm:p-4">
+          <div className="flex h-full w-full max-w-[1600px] flex-col overflow-hidden rounded-lg bg-adsk-offwhite shadow-2xl">
+            <header className="surface-dark flex shrink-0 items-start justify-between gap-4 px-4 py-4 sm:px-6">
               <div>
-                <h2 className="title-on-dark font-legend text-xl">
+                <h2 id="tool-dashboard-title" className="title-on-dark font-legend text-xl">
                   {dashboard?.name ?? tools.find((t) => t.id === openId)?.name ?? "Loading"}
                 </h2>
                 <p className="mt-1 text-xs text-adsk-lightgray">
@@ -135,7 +200,7 @@ export function ToolsExplorer({
               </button>
             </header>
 
-            <div className="min-h-0 flex-1 overflow-auto px-6 py-5">
+            <div className="min-h-0 flex-1 overflow-auto px-4 py-5 sm:px-6">
               {loading && <p className="text-xs text-adsk-gray">Computing dashboard…</p>}
               {error && (
                 <p className="rounded border border-adsk-lightgray bg-adsk-white px-4 py-3 text-xs text-adsk-gray">
@@ -145,14 +210,14 @@ export function ToolsExplorer({
               {dashboard && <DashboardBody dashboard={dashboard} />}
             </div>
 
-            <footer className="flex shrink-0 items-center justify-between border-t border-adsk-lightgray bg-adsk-white px-6 py-2.5">
-              <span className="text-[10px] text-adsk-gray">
+            <footer className="flex shrink-0 items-center justify-between border-t border-adsk-lightgray bg-adsk-white px-4 py-2.5 sm:px-6">
+              <span className="text-xs text-adsk-gray">
                 Autodesk Forma · Data Connector extract
               </span>
               <button
                 type="button"
                 onClick={close}
-                className="font-legend text-[11px] text-adsk-link hover:underline"
+                className="font-legend text-xs text-adsk-link hover:underline"
               >
                 ← Back to tools
               </button>
@@ -167,14 +232,20 @@ export function ToolsExplorer({
 function ToolGrid({
   tools,
   onOpen,
+  favorites,
+  onToggleFavorite,
+  canFavorite,
 }: {
   tools: ToolCard[];
   onOpen: (tool: ToolCard) => void;
+  favorites: string[];
+  onToggleFavorite: (id: string) => void;
+  canFavorite: boolean;
 }) {
   return (
     <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
       {tools.map((tool) => (
-        <li key={tool.id}>
+        <li key={tool.id} className="relative">
           <button
             type="button"
             onClick={() => onOpen(tool)}
@@ -184,7 +255,7 @@ function ToolGrid({
                 : "border-dashed border-adsk-lightgray opacity-70 hover:opacity-100"
             }`}
           >
-            <div className="flex items-start justify-between gap-2">
+            <div className="flex items-start justify-between gap-8">
               <h3 className="font-legend text-[13px] leading-snug text-adsk-black">{tool.name}</h3>
               <span
                 className="mt-0.5 h-2 w-2 shrink-0 rounded-full border border-adsk-lightgray"
@@ -203,11 +274,26 @@ function ToolGrid({
               )}
             </p>
           </button>
+          {canFavorite && <button type="button" onClick={() => onToggleFavorite(tool.id)}
+            aria-label={`${favorites.includes(tool.id) ? "Remove" : "Add"} ${tool.name} ${favorites.includes(tool.id) ? "from" : "to"} favorite tools`}
+            aria-pressed={favorites.includes(tool.id)}
+            className="absolute right-3 top-3 rounded px-1 text-lg leading-none text-adsk-black hover:bg-adsk-offwhite focus:outline-2 focus:outline-adsk-yellow">
+            {favorites.includes(tool.id) ? "★" : "☆"}
+          </button>}
         </li>
       ))}
     </ul>
   );
 }
+
+const TOOL_CATEGORIES: Array<{ name: string; ids: string[] }> = [
+  { name: "Project management", ids: ["issues", "rfis", "submittals", "meetings", "reviews"] },
+  { name: "Field", ids: ["forms", "photos", "assets", "quality-field", "iq"] },
+  { name: "Design & coordination", ids: ["quality-ddr", "quality-mc", "quality-mc-clash"] },
+  { name: "Commercial", ids: ["cost", "cost-kpis", "takeoff", "estimate"] },
+  { name: "Planning", ids: ["schedule", "schedule-kpi"] },
+  { name: "Administration", ids: ["activities", "administration"] },
+];
 
 function DashboardBody({ dashboard }: { dashboard: Dashboard }) {
   const available = dashboard.kpis.filter((k) => k.available);
@@ -216,8 +302,8 @@ function DashboardBody({ dashboard }: { dashboard: Dashboard }) {
     <div className="space-y-5">
       {!dashboard.enabled && (
         <p className="rounded border border-adsk-gold bg-adsk-gold/10 px-4 py-2.5 text-xs text-adsk-black">
-          This tool&apos;s primary table ({dashboard.missing.join(", ")}.csv) is not in the uploaded
-          extract, so panels below fall back to whatever related tables are present.
+          This tool&apos;s primary table ({dashboard.missing.join(", ")}.csv) is not in the uploaded extract,
+          so panels below fall back to whatever related tables are present.
         </p>
       )}
 
@@ -225,7 +311,7 @@ function DashboardBody({ dashboard }: { dashboard: Dashboard }) {
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
           {dashboard.kpis.map((kpi, index) => (
             <div key={index} className="rounded border border-adsk-lightgray bg-adsk-white px-4 py-3">
-              <div className="font-legend text-[10px] uppercase tracking-wide text-adsk-gray">
+              <div className="font-legend text-xs uppercase tracking-wide text-adsk-gray">
                 {kpi.label}
               </div>
               <div className="tnum mt-1 font-legend text-2xl text-adsk-black">
@@ -235,13 +321,13 @@ function DashboardBody({ dashboard }: { dashboard: Dashboard }) {
                     : formatDisplay(kpi.value, kpi.format)
                   : "—"}
               </div>
-              {!kpi.available && <div className="mt-0.5 text-[10px] text-adsk-gray">{kpi.reason}</div>}
+              {!kpi.available && <div className="mt-0.5 text-xs text-adsk-gray">{kpi.reason}</div>}
             </div>
           ))}
         </div>
       )}
 
-      <div className="grid gap-3 lg:grid-cols-2">
+      <div className="grid gap-3 xl:grid-cols-2">
         {dashboard.charts.map((chart, index) => (
           <ChartCard key={index} result={chart} />
         ))}

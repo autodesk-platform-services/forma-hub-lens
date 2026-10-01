@@ -2,7 +2,7 @@ import "server-only";
 
 import { env } from "../env";
 import type { Session } from "./auth";
-import { apsFetch, apsPaginate } from "./client";
+import { apsFetch, apsPaginate, requireLiveApsSession } from "./client";
 import { getTwoLeggedToken } from "./twoLegged";
 import { USERINFO_URL } from "./endpoints";
 
@@ -153,12 +153,14 @@ export type NewProject = {
   endDate?: string;
   value?: number;
   currency?: string;
+  /** APS clones a Forma template with body.template.projectId. */
+  templateProjectId?: string;
 };
 
 export async function createProject(
   session: Session,
   project: NewProject,
-): Promise<{ id: string; name?: string }> {
+): Promise<{ jobId?: string; id?: string; name?: string }> {
   const body: Record<string, unknown> = {
     name: project.name,
     type: project.type,
@@ -171,11 +173,31 @@ export async function createProject(
   if (project.endDate) body.endDate = project.endDate;
   if (project.value !== undefined) body.value = project.value;
   if (project.currency) body.currency = project.currency;
+  if (project.templateProjectId) body.template = { projectId: project.templateProjectId };
 
-  return apsFetch<{ id: string; name?: string }>(
+  return apsFetch<{ jobId?: string; id?: string; name?: string }>(
     session,
     `${ADMIN_V1}/accounts/${env.hubId}/projects`,
     { method: "POST", regional: true, body },
+  );
+}
+
+export type TemplateProject = { id: string; name?: string; classification?: string; status?: string };
+
+/** The Admin API distinguishes native Forma project templates by classification. */
+export async function fetchTemplateProjects(session: Session): Promise<TemplateProject[]> {
+  return apsPaginate<TemplateProject>(
+    session,
+    `${ADMIN_V1}/accounts/${env.hubId}/projects`,
+    {
+      regional: true,
+      limit: 100,
+      searchParams: {
+        "filter[classification]": "template",
+        "filter[status]": "active",
+        fields: "id,name,classification,status",
+      },
+    },
   );
 }
 
@@ -227,7 +249,7 @@ export class NotAccountAdminError extends Error {
   }
 }
 
-type HqUser = { uid?: string; id?: string; email?: string; access_level?: string };
+type HqUser = { uid?: string; id?: string; email?: string; access_level?: string; role?: string };
 
 /**
  * Confirms the signed-in person is an account admin on the hub.
@@ -236,6 +258,7 @@ type HqUser = { uid?: string; id?: string; email?: string; access_level?: string
  * credentials, so without this any hub member could archive projects.
  */
 export async function requireAccountAdmin(session: Session): Promise<void> {
+  requireLiveApsSession(session);
   let email = session.userEmail?.trim().toLowerCase();
   if (!email) {
     // /userinfo is best-effort during sign-in. Re-read it here if that first
@@ -258,7 +281,8 @@ export async function requireAccountAdmin(session: Session): Promise<void> {
   const token = await getTwoLeggedToken();
   const url = new URL(`${HQ_V1}/accounts/${env.hubId}/users/search`);
   url.searchParams.set("email", email);
-  url.searchParams.set("limit", "5");
+  url.searchParams.set("partial", "false");
+  url.searchParams.set("limit", "10");
 
   const res = await fetch(url, {
     headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
@@ -270,9 +294,12 @@ export async function requireAccountAdmin(session: Session): Promise<void> {
   }
 
   const body = (await res.json()) as HqUser[] | { results?: HqUser[] };
-  const users = Array.isArray(body) ? body : (body.results ?? []);
-  const me = users.find((u) => u.email?.trim().toLowerCase() === email);
-  if (me?.access_level !== "account_admin") throw new NotAccountAdminError();
+  const users = Array.isArray(body) ? body : body.results;
+  if (!Array.isArray(users)) throw new NotAccountAdminError();
+  const matches = users.filter((u) => u.email?.trim().toLowerCase() === email);
+  if (matches.length !== 1 || (matches[0].access_level ?? matches[0].role) !== "account_admin") {
+    throw new NotAccountAdminError();
+  }
 }
 
 /** Reads a project's current status straight from Autodesk, not the cache. */

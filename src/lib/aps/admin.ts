@@ -65,7 +65,18 @@ export type SyncResult = { count: number; syncedAt: number };
 export async function syncProjects(session: Session): Promise<SyncResult> {
   const projects = await fetchProjects(session);
   const db = getDb();
-  const syncedAt = Date.now();
+  const ids = new Set<string>();
+  for (const project of projects) {
+    if (!project || typeof project.id !== "string" || !project.id.trim() || ids.has(project.id)) {
+      throw new Error("Autodesk returned an incomplete or duplicate project list; the cached inventory was not changed.");
+    }
+    ids.add(project.id);
+  }
+  // The timestamp doubles as this sync's generation marker. Make it distinct
+  // even when two syncs happen within one millisecond.
+  const previous = db.prepare("SELECT MAX(synced_at) AS latest FROM projects")
+    .get() as { latest: number | null };
+  const syncedAt = Math.max(Date.now(), Number(previous.latest ?? 0) + 1);
 
   const upsert = db.prepare(
     `INSERT INTO projects (id, name, status, type, platform, job_number, member_count,
@@ -101,6 +112,9 @@ export async function syncProjects(session: Session): Promise<SyncResult> {
         syncedAt,
       );
     }
+    // `fetchProjects` only returns after a complete pagination pass. Remove
+    // records no longer in that response so action pickers cannot use stale IDs.
+    db.prepare("DELETE FROM projects WHERE synced_at <> ?").run(syncedAt);
     db.exec("COMMIT");
   } catch (error) {
     db.exec("ROLLBACK");

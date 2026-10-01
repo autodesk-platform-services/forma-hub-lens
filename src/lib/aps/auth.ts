@@ -3,13 +3,15 @@ import "server-only";
 import { randomBytes, randomUUID } from "node:crypto";
 import { cookies } from "next/headers";
 import { getDb } from "../db";
-import { env } from "../env";
-import { HUB_CHECK_TTL_MS, verifyHubAccess } from "./authorization";
+import { configProblems, env } from "../env";
+import { HUB_CHECK_TTL_MS, verifyHubAccess, type HubRole } from "./authorization";
 import { AUTHORIZE_URL, TOKEN_URL, USERINFO_URL } from "./endpoints";
 
 export { AUTHORIZE_URL, TOKEN_URL, USERINFO_URL } from "./endpoints";
 
+export type SessionMode = "live";
 export const SESSION_COOKIE = "forma_session";
+export const OAUTH_STATE_COOKIE = "forma_oauth_state";
 
 /**
  * account:read       — Forma Admin API reads (projects, users, companies)
@@ -32,6 +34,7 @@ export const SCOPES = [
 
 export type Session = {
   id: string;
+  mode: SessionMode;
   accessToken: string;
   refreshToken: string | null;
   expiresAt: number;
@@ -39,8 +42,9 @@ export type Session = {
   userId: string | null;
   userName: string | null;
   userEmail: string | null;
-  /** When this account was last confirmed to be a member of the hub. */
+  /** When this account's hub access level was last confirmed. */
   hubVerifiedAt: number | null;
+  hubRole: HubRole | null;
 };
 
 type TokenResponse = {
@@ -68,7 +72,7 @@ function basicAuthHeader(): string {
 }
 
 export function buildAuthorizeUrl(): { url: string; state: string } {
-  const state = randomBytes(24).toString("base64url");
+  const state = `live.${randomBytes(24).toString("base64url")}`;
   const db = getDb();
   db.prepare("INSERT INTO oauth_states (state, created_at) VALUES (?, ?)").run(state, Date.now());
   // Best-effort cleanup of states older than 15 minutes.
@@ -90,6 +94,12 @@ export function consumeState(state: string): boolean {
   if (!row) return false;
   db.prepare("DELETE FROM oauth_states WHERE state = ?").run(state);
   return true;
+}
+
+/** Bind the one-use APS state to the browser that initiated sign-in. */
+export function consumeBrowserState(state: string, browserState: string | undefined): boolean {
+  if (!browserState || state !== browserState || !state.startsWith("live.")) return false;
+  return consumeState(state);
 }
 
 async function postToken(body: URLSearchParams): Promise<TokenResponse> {
@@ -136,17 +146,18 @@ export async function exchangeCode(code: string): Promise<Session> {
     }),
   );
 
-  // Authenticate, then authorise. A session is only created for an account that
-  // Autodesk confirms can reach this hub.
-  const access = await verifyHubAccess(token.access_token);
+  const profile = await fetchUserInfo(token.access_token);
+  const access = await verifyHubAccess(token.access_token, profile?.email ?? null);
   if (!access.ok) throw new HubAccessError(access.reason);
 
-  const session = await persistSession(randomUUID(), token);
-  markHubVerified(session.id, Date.now());
-  return { ...session, hubVerifiedAt: Date.now() };
+  const session = await persistSession(randomUUID(), token, undefined, profile);
+  const now = Date.now();
+  markHubVerified(session.id, now, access.role);
+  return { ...session, hubVerifiedAt: now, hubRole: access.role };
 }
 
 async function refresh(session: Session): Promise<Session> {
+  if (session.mode !== "live") throw new Error("Session is not a live hub session.");
   if (!session.refreshToken) {
     throw new Error("Session expired and no refresh token is available. Sign in again.");
   }
@@ -164,18 +175,21 @@ async function persistSession(
   id: string,
   token: TokenResponse,
   previous?: Session,
+  profile?: { userId: string; name: string; email: string } | null,
 ): Promise<Session> {
   const session: Session = {
     id,
+    mode: "live",
     accessToken: token.access_token,
     // APS rotates refresh tokens; fall back to the previous one if none returned.
     refreshToken: token.refresh_token ?? previous?.refreshToken ?? null,
     expiresAt: Date.now() + token.expires_in * 1000,
     scope: token.scope ?? previous?.scope ?? SCOPES.join(" "),
-    userId: previous?.userId ?? null,
-    userName: previous?.userName ?? null,
-    userEmail: previous?.userEmail ?? null,
+    userId: previous?.userId ?? profile?.userId ?? null,
+    userName: previous?.userName ?? profile?.name ?? null,
+    userEmail: previous?.userEmail ?? profile?.email ?? null,
     hubVerifiedAt: previous?.hubVerifiedAt ?? null,
+    hubRole: previous?.hubRole ?? null,
   };
 
   if (!session.userId) {
@@ -187,8 +201,8 @@ async function persistSession(
 
   getDb()
     .prepare(
-      `INSERT INTO sessions (id, access_token, refresh_token, expires_at, scope, user_id, user_name, user_email, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO sessions (id, access_token, refresh_token, expires_at, scope, user_id, user_name, user_email, created_at, mode)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(id) DO UPDATE SET
          access_token = excluded.access_token,
          refresh_token = excluded.refresh_token,
@@ -196,7 +210,8 @@ async function persistSession(
          scope = excluded.scope,
          user_id = excluded.user_id,
          user_name = excluded.user_name,
-         user_email = excluded.user_email`,
+         user_email = excluded.user_email,
+         mode = excluded.mode`,
     )
     .run(
       session.id,
@@ -208,6 +223,7 @@ async function persistSession(
       session.userName,
       session.userEmail,
       Date.now(),
+      session.mode,
     );
 
   return session;
@@ -239,17 +255,20 @@ async function fetchUserInfo(
   }
 }
 
-function readSession(id: string): Session | null {
+/** Server-side session lookup. Unknown and former demo sessions are rejected. */
+export function readSession(id: string): Session | null {
   const row = getDb()
     .prepare(
       `SELECT id, access_token, refresh_token, expires_at, scope, user_id, user_name, user_email,
-              hub_verified_at
+              hub_verified_at, hub_role, mode
        FROM sessions WHERE id = ?`,
     )
     .get(id) as Record<string, string | number | null> | undefined;
   if (!row) return null;
+  if (row.mode !== "live") return null;
   return {
     id: row.id as string,
+    mode: "live",
     accessToken: row.access_token as string,
     refreshToken: (row.refresh_token as string) ?? null,
     expiresAt: Number(row.expires_at),
@@ -258,21 +277,26 @@ function readSession(id: string): Session | null {
     userName: (row.user_name as string) ?? null,
     userEmail: (row.user_email as string) ?? null,
     hubVerifiedAt: row.hub_verified_at === null ? null : Number(row.hub_verified_at),
+    hubRole: row.hub_role === "hub_admin" || row.hub_role === "executive"
+      ? row.hub_role
+      : null,
   };
 }
 
-function markHubVerified(id: string, at: number): void {
-  getDb().prepare("UPDATE sessions SET hub_verified_at = ? WHERE id = ?").run(at, id);
+function markHubVerified(id: string, at: number, role: HubRole): void {
+  getDb().prepare("UPDATE sessions SET hub_verified_at = ?, hub_role = ? WHERE id = ?")
+    .run(at, role, id);
 }
 
 /**
  * Current session with a valid access token, refreshing if it is close to
- * expiry and re-confirming hub membership once the last check goes stale.
+ * expiry and re-confirming hub role once the last check goes stale.
  *
  * Re-checking matters: someone removed from the hub keeps a valid Autodesk
  * account, so without this their session would outlive their access.
  */
 export async function getSession(): Promise<Session | null> {
+  if (configProblems().length) return null;
   const jar = await cookies();
   const id = jar.get(SESSION_COOKIE)?.value;
   if (!id) return null;
@@ -284,15 +308,15 @@ export async function getSession(): Promise<Session | null> {
   if (!session) return null;
 
   const checkedAt = session.hubVerifiedAt ?? 0;
-  if (Date.now() - checkedAt > HUB_CHECK_TTL_MS) {
-    const access = await verifyHubAccess(session.accessToken);
+  if (!session.hubRole || Date.now() - checkedAt > HUB_CHECK_TTL_MS) {
+    const access = await verifyHubAccess(session.accessToken, session.userEmail);
     if (!access.ok) {
       destroySession(session.id);
       return null;
     }
     const now = Date.now();
-    markHubVerified(session.id, now);
-    session = { ...session, hubVerifiedAt: now };
+    markHubVerified(session.id, now, access.role);
+    session = { ...session, hubVerifiedAt: now, hubRole: access.role };
   }
 
   return session;
@@ -300,6 +324,7 @@ export async function getSession(): Promise<Session | null> {
 
 /** Return no access on refresh failure, retaining recoverable sessions for retry. */
 export async function refreshIfNeeded(session: Session): Promise<Session | null> {
+  if (session.mode !== "live") return null;
   if (session.expiresAt - Date.now() > 60_000) return session;
   try {
     return await refresh(session);
@@ -320,6 +345,23 @@ export async function requireSession(): Promise<Session> {
   const session = await getSession();
   if (!session) throw new UnauthorizedError();
   return session;
+}
+
+export class HubAdminRequiredError extends Error {
+  constructor() {
+    super("This operation requires Hub Admin access on the Forma hub.");
+    this.name = "HubAdminRequiredError";
+  }
+}
+
+/** Recheck the live role immediately before an administrative write. */
+export async function requireHubAdminSession(): Promise<Session> {
+  const session = await requireSession();
+  if (session.mode !== "live") throw new HubAdminRequiredError();
+  const access = await verifyHubAccess(session.accessToken, session.userEmail);
+  if (!access.ok || access.role !== "hub_admin") throw new HubAdminRequiredError();
+  markHubVerified(session.id, Date.now(), access.role);
+  return { ...session, hubVerifiedAt: Date.now(), hubRole: access.role };
 }
 
 export class UnauthorizedError extends Error {

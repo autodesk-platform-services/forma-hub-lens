@@ -19,14 +19,21 @@ export function SetupRequired({ problems }: { problems: string[] }) {
 
 export function SignInRequired() {
   return (
-    <Card title="Sign in to Autodesk">
-      <p className="max-w-prose text-xs text-adsk-black">
-        The Data Connector and Hub Admin endpoints require a three-legged token — a two-legged
-        client-credentials token will not do, because Autodesk scopes the data to the signed-in
-        user&apos;s hub permissions. Sign in with an account that holds{" "}
-        <strong className="text-adsk-black">Hub Admin</strong> or{" "}
-        <strong className="text-adsk-black">Executive Overview</strong> rights on the hub, otherwise
-        you will only see projects you are a member of.
+    <Card title="A clearer view of your Forma hub">
+      <p className="max-w-2xl text-sm text-adsk-black">
+        Forma Hub Lens brings project activity, people and access, data health, and administrative
+        workflows into one portfolio view. Start with the review queue, then open the evidence
+        behind any project or data signal.
+      </p>
+      <div className="mt-4 grid gap-3 text-xs text-adsk-gray sm:grid-cols-3">
+        <div className="rounded border border-adsk-lightgray p-3"><strong className="block text-adsk-black">See the portfolio</strong>Compare projects, activity, and adoption across the hub.</div>
+        <div className="rounded border border-adsk-lightgray p-3"><strong className="block text-adsk-black">Investigate access</strong>Find people, memberships, and folder assignments.</div>
+        <div className="rounded border border-adsk-lightgray p-3"><strong className="block text-adsk-black">Act with context</strong>Preview Hub Admin changes and inspect the local audit record.</div>
+      </div>
+      <p className="mt-4 max-w-2xl text-xs text-adsk-gray">
+        Sign in with an Autodesk account that has <strong>Hub Admin</strong> or
+        <strong> Executive Overview</strong> access on this hub. Lens verifies that role before
+        showing portfolio data. Administrative changes require Hub Admin.
       </p>
       <a
         href="/api/aps/login"

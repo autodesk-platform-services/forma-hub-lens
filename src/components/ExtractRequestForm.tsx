@@ -2,6 +2,7 @@
 
 import { useActionState, useState } from "react";
 import { requestExtract, type ActionState } from "@/app/actions";
+import { CheckboxList } from "@/components/CheckboxList";
 
 const SERVICE_GROUPS = [
   { value: "activities", label: "activities", hint: "Docs, Issues and Admin audit events" },
@@ -28,12 +29,16 @@ const labelClass = "block text-[11px] font-medium uppercase tracking-wide text-a
 const inputClass =
   "mt-1 w-full rounded border border-adsk-lightgray bg-adsk-white px-2.5 py-1.5 text-xs text-adsk-black focus:border-adsk-yellow focus:outline-none";
 
-export function ExtractRequestForm({ jobsLastDay }: { jobsLastDay: number }) {
+export function ExtractRequestForm({ jobsLastDay, projects }: {
+  jobsLastDay: number;
+  projects: Array<{ id: string; name: string }>;
+}) {
   const [state, formAction, pending] = useActionState<ActionState, FormData>(
     requestExtract,
     null,
   );
   const [dateRange, setDateRange] = useState("PAST_7_DAYS");
+  const [selectedGroups, setSelectedGroups] = useState<string[]>(["activities"]);
 
   const today = new Date().toISOString().slice(0, 10);
   const weekAgo = new Date(Date.now() - 7 * 86_400_000).toISOString().slice(0, 10);
@@ -119,8 +124,20 @@ export function ExtractRequestForm({ jobsLastDay }: { jobsLastDay: number }) {
         )}
       </div>
 
+      {projects.length > 0 && <div>
+        <CheckboxList label="Specific projects (optional)" name="projectIds" maxSelected={50}
+          options={projects.map((project) => ({ value: project.id, label: project.name }))} />
+        <p className="mt-1 text-[11px] text-adsk-gray">Leave empty for a hub-wide request, which requires Executive Overview in Autodesk. Use the checkboxes to select projects if your account has project-level Data Connector access.</p>
+      </div>}
+
       <fieldset>
         <legend className={labelClass}>Service groups</legend>
+        <div className="mt-1 flex gap-3 text-xs">
+          <button type="button" onClick={() => setSelectedGroups(SERVICE_GROUPS.map((group) => group.value))}
+            className="text-adsk-link hover:underline">Select all</button>
+          <button type="button" onClick={() => setSelectedGroups([])}
+            className="text-adsk-link hover:underline">Clear all</button>
+        </div>
         <div className="mt-2 flex flex-wrap gap-2">
           {SERVICE_GROUPS.map((group) => (
             <label
@@ -132,7 +149,9 @@ export function ExtractRequestForm({ jobsLastDay }: { jobsLastDay: number }) {
                 type="checkbox"
                 name="serviceGroups"
                 value={group.value}
-                defaultChecked={group.value === "activities"}
+                checked={selectedGroups.includes(group.value)}
+                onChange={(event) => setSelectedGroups((current) => event.target.checked
+                  ? [...current, group.value] : current.filter((value) => value !== group.value))}
                 className="accent-adsk-yellow"
               />
               {group.label}

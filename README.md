@@ -9,47 +9,48 @@
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.9-blue.svg)
 ![Level](https://img.shields.io/badge/Level-Intermediate-yellow.svg)
 
-Forma Hub Lens is a local console for Autodesk Forma hub administrators and members with Executive Overview access. It combines cross-project activity, 21 tool dashboards, Data Connector extracts, and hub management in one Next.js application.
-
-The sample shows how to turn asynchronous Data Connector CSV extracts into a searchable local activity cache and dashboards. It assumes familiarity with three-legged OAuth, Autodesk Construction Cloud, and SQLite.
-
 ![Forma Hub Lens overview illustration](thumbnail.png)
 
-## Usage
+## Objective
 
-- **Overview, Projects, and Activity:** sync the hub project list, explore ingested activity, and export filtered rows.
-- **Extracts:** request activity data through the APS Data Connector API, track those jobs, and ingest completed activity CSVs.
-- **Tools:** upload a separate ZIP exported from Autodesk Construction Cloud **Insight › Data Connector** to populate dashboards for the tools present in that extract.
-- **Manage:** perform guarded bulk member and project operations.
+Forma Hub Lens brings portfolio reporting, access review, Data Connector workflows, and bulk administration into one web app for a configured Autodesk Forma hub. **Hub Admin** and **Executive Overview** users can read the portfolio; live administration writes, project sync, and shared dataset replacement require a fresh Hub Admin check. Autodesk may impose additional permissions on individual APIs.
 
-**Two separate data paths:** On **Extracts**, request and ingest activity CSVs for the Overview, Projects, and Activity pages. For **Tools**, create and download a ZIP in Autodesk Construction Cloud's external Insight Data Connector, then upload it on this app's Tools page. `Sync projects` fills the project list; it does not populate tool dashboards. See the [step-by-step usage guide](docs/USAGE.md#typical-workflow).
+## What it does
 
-## Development
+- **Overview and Projects:** review project inventory, activity trends, lifecycle candidates, and source coverage.
+- **People and Access:** inspect uploaded membership and product records, compare people, and browse Docs folder permission assignments.
+- **Insights:** explore activity, tool dashboards, governance prompts, saved views, and cross-project search.
+- **Data:** request and ingest Data Connector jobs, inspect source health, and review integration and closeout evidence.
+- **Admin:** preview bulk member and project changes, manage companies, use project recipes, prepare offboarding, and inspect the local operation audit.
 
-### Prerequisites
+There are two independent reporting paths. **Extracts** requests APS Data Connector jobs and ingests completed activity CSVs into the local activity cache; full reporting CSVs from completed APS jobs can also populate dashboards with verified job lineage. Separately, a Hub Admin can download a ZIP from Autodesk Construction Cloud **Insight › Data Connector** and upload it on **Tools**. Lens labels the origin of a user-uploaded ZIP as unverified. **Sync projects** updates the project list and does not populate either reporting path.
+
+## Prerequisites
 
 - Node.js 22 or later and npm.
-- An APS **Traditional Web App** with its Client ID provisioned for the target Autodesk Forma/ACC account under **Hub Admin › Custom Integrations**. See [Provision access in other products](https://get-started.aps.autodesk.com/#provision-access-in-other-products).
-- A Forma hub ID and an account with Hub Admin or Executive Overview access.
-- An OAuth callback registered on the APS app that exactly matches this app's local callback: `http://localhost:3000/api/aps/callback`. APS tutorial examples often use port 8080; this app runs on **3000**.
+- An APS **Traditional Web App** whose Client ID is provisioned for the target Forma account under **Hub Admin › Custom Integrations**. Follow [Autodesk's provisioning steps](https://get-started.aps.autodesk.com/#provision-access-in-other-products).
+- The Forma hub ID and a sign-in account with Hub Admin or Executive Overview access.
+- An APS OAuth callback registered exactly as `http://localhost:3000/api/aps/callback` for local use. This app runs on port **3000**.
 
-### Build and run locally
+## Quick start
 
 ```bash
 npm install
 cp .env.example .env.local
-# Set APS_CLIENT_ID, APS_CLIENT_SECRET, APS_CALLBACK_URL, and FORMA_HUB_ID.
+# Fill APS_CLIENT_ID, APS_CLIENT_SECRET, and FORMA_HUB_ID in .env.local.
 npm run dev
 ```
 
-Open <http://localhost:3000> and sign in with a member of the configured hub. Keep `.env.local` private; it is ignored by Git.
+Open <http://localhost:3000> and sign in. Keep `.env.local` private; it is ignored by Git. The app stores sessions and ingested hub data in a local SQLite directory, so use an approved persistent volume and access policy for shared deployment.
 
 ## Documentation
 
 - [Usage and local setup](docs/USAGE.md)
+- [Feature guide and source limits](docs/FEATURES.md)
+- [Integration Health and Closeout workflows](docs/INTEGRATION-HEALTH-AND-CLOSEOUT.md)
 - [Architecture and APS endpoints](docs/ARCHITECTURE.md)
-- [Docker and deployment considerations](docs/DEPLOYMENT.md)
-- [Known limitations and operational notes](docs/LIMITATIONS.md)
+- [Deployment considerations](docs/DEPLOYMENT.md)
+- [Known limitations](docs/LIMITATIONS.md)
 - [Troubleshooting](docs/TROUBLESHOOTING.md)
 
 ## License

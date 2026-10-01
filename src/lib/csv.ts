@@ -65,6 +65,8 @@ export async function* parseCsv(
       }
     }
 
+    if (inQuotes) throw new Error("unterminated quoted CSV field");
+
     // Trailing row without a newline terminator.
     if (sawAnyChar && (field.length > 0 || row.length > 0)) {
       pushField();

@@ -1,6 +1,8 @@
 import "server-only";
 
 import { env } from "../env";
+import { getTwoLeggedToken } from "./twoLegged";
+import { USERINFO_URL } from "./endpoints";
 
 /**
  * Authorization gate.
@@ -14,70 +16,89 @@ import { env } from "../env";
  * activity views are served from this app's local cache, so nothing upstream is
  * checking them. This is where that check happens.
  *
- * The test: ask Data Management which hubs the user can reach and require ours
- * to be among them. It mirrors the permission Autodesk already applies
- * elsewhere and needs no list to maintain.
+ * Project-oriented Data Management hub membership is not a reliable test for
+ * Executive Overview. Verify the 3LO token's identity, then look up that exact
+ * identity in the configured hub's account directory. Only the two hub-level
+ * access levels approved for Lens can enter.
  */
 
-const HUBS_URL = "https://developer.api.autodesk.com/project/v1/hubs";
-
 export type HubAccess =
-  | { ok: true; hubName: string | null }
+  | { ok: true; role: HubRole }
   | { ok: false; reason: string };
 
-type HubsResponse = {
-  data?: Array<{ id?: string; attributes?: { name?: string } }>;
+export type HubRole = "hub_admin" | "executive";
+
+type AccountUser = {
+  email?: unknown;
+  access_level?: unknown;
+  role?: unknown;
 };
 
-/** Data Management prefixes ACC/BIM 360 hub ids with "b."; Admin APIs don't. */
-function matchesHub(id: string | undefined, hubId: string): boolean {
-  if (!id) return false;
-  return id.replace(/^b\./i, "").toLowerCase() === hubId.toLowerCase();
-}
+export async function verifyHubAccess(
+  accessToken: string,
+  signedInEmail: string | null,
+): Promise<HubAccess> {
+  const email = signedInEmail?.trim().toLowerCase();
+  if (!email) {
+    return { ok: false, reason: "Autodesk did not provide an email address for role verification." };
+  }
 
-export async function verifyHubAccess(accessToken: string): Promise<HubAccess> {
-  let res: Response;
   try {
-    res = await fetch(HUBS_URL, {
+    const identity = await fetch(USERINFO_URL, {
       headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/json" },
       cache: "no-store",
     });
-  } catch (error) {
-    // Treat a network failure as "cannot confirm", never as "allowed".
-    return {
-      ok: false,
-      reason: `Could not reach Autodesk to confirm hub access: ${
-        error instanceof Error ? error.message : String(error)
-      }`,
-    };
-  }
+    if (!identity.ok) return { ok: false, reason: "Autodesk could not verify the signed-in identity." };
+    const profile = (await identity.json()) as { email?: unknown };
+    if (typeof profile.email !== "string" || profile.email.trim().toLowerCase() !== email) {
+      return { ok: false, reason: "The Autodesk identity no longer matches this session. Sign in again." };
+    }
 
-  if (res.status === 401) {
-    return { ok: false, reason: "Autodesk rejected the access token." };
-  }
-  if (!res.ok) {
-    return { ok: false, reason: `Autodesk returned ${res.status} when listing your hubs.` };
-  }
-
-  let body: HubsResponse;
-  try {
-    body = (await res.json()) as HubsResponse;
+    const appToken = await getTwoLeggedToken();
+    const url = new URL(
+      `https://developer.api.autodesk.com/hq/v1/accounts/${env.hubId}/users/search`,
+    );
+    url.searchParams.set("email", email);
+    url.searchParams.set("partial", "false");
+    url.searchParams.set("limit", "10");
+    const directory = await fetch(url, {
+      headers: { Authorization: `Bearer ${appToken}`, Accept: "application/json" },
+      cache: "no-store",
+    });
+    if (!directory.ok) {
+      return { ok: false, reason: `Autodesk returned ${directory.status} during hub role verification.` };
+    }
+    const body = (await directory.json()) as AccountUser[] | { results?: AccountUser[] };
+    const users = Array.isArray(body) ? body : body.results;
+    if (!Array.isArray(users)) {
+      return { ok: false, reason: "Autodesk returned an unreadable hub member list." };
+    }
+    // The HQ search can return fuzzy matches. Never trust the first result.
+    const matching = users.filter((user) =>
+      typeof user.email === "string" && user.email.trim().toLowerCase() === email
+    );
+    if (matching.length !== 1) {
+      return { ok: false, reason: "Autodesk could not resolve one matching member in this hub." };
+    }
+    // These are the explicit legacy HQ API values. Unknown or newly added
+    // access levels deny by default until they are verified against Autodesk.
+    const directoryRole = matching[0].access_level ?? matching[0].role;
+    const role: HubRole | null = directoryRole === "account_admin"
+      ? "hub_admin"
+      : directoryRole === "executive"
+        ? "executive"
+        : null;
+    if (!role) {
+      return {
+        ok: false,
+        reason: "This Autodesk account needs Hub Admin or Executive Overview access to this hub.",
+      };
+    }
+    return { ok: true, role };
   } catch {
-    return { ok: false, reason: "Autodesk returned an unreadable hub list." };
+    return { ok: false, reason: "Could not confirm hub role with Autodesk." };
   }
-
-  const hubs = body.data ?? [];
-  const match = hubs.find((hub) => matchesHub(hub.id, env.hubId));
-  if (!match) {
-    return {
-      ok: false,
-      reason:
-        "Your Autodesk account is not a member of this hub, so it cannot view this hub's data.",
-    };
-  }
-
-  return { ok: true, hubName: match.attributes?.name ?? null };
 }
 
-/** How long a membership check is trusted before it is repeated. */
+/** How long a hub role check is trusted before it is repeated. */
 export const HUB_CHECK_TTL_MS = 30 * 60 * 1000;

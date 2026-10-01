@@ -222,7 +222,7 @@ export const TOOL_SPECS: ToolSpec[] = [
     charts: [
       { kind: "treemap", title: "Forms by Template Type", table: "forms_form_templates", category: { column: "template_type" }, value: { column: "id", agg: "count" }, limit: 12 },
       { kind: "bar", title: "Forms by Project", table: "forms_forms", category: { table: "admin_projects", column: "name" }, value: { column: "id", agg: "count" }, limit: 12 },
-      { kind: "area", title: "Forms over time by Type", table: "forms_forms", category: { column: "created_at", bucket: "month" }, value: { column: "id", agg: "count" } },
+      { kind: "area", title: "Forms over time", table: "forms_forms", category: { column: "created_at", bucket: "month" }, value: { column: "id", agg: "count" } },
       { kind: "donut", title: "Forms by Status", table: "forms_forms", category: { column: "status" }, value: { column: "id", agg: "count" } },
       { kind: "bar", title: "Forms by Template", table: "forms_forms", category: { table: "forms_form_templates", column: "name" }, value: { column: "id", agg: "count" }, limit: 10 },
     ],
@@ -413,7 +413,7 @@ export const TOOL_SPECS: ToolSpec[] = [
     ],
     charts: [
       { kind: "line", title: "Reviews created over time", table: "reviews_reviews", category: { column: "created_at", bucket: "month" }, value: { column: "id", agg: "count" } },
-      { kind: "bar", title: "Reviews by Project Name and Status", table: "reviews_reviews", category: { table: "admin_projects", column: "name" }, value: { column: "id", agg: "count" }, series: { column: "status" }, limit: 12 },
+      { kind: "stackedBar", title: "Reviews by Project Name and Status", table: "reviews_reviews", category: { table: "admin_projects", column: "name" }, value: { column: "id", agg: "count" }, series: { column: "status" }, limit: 12 },
       { kind: "donut", title: "Reviews by Status", table: "reviews_reviews", category: { column: "status" }, value: { column: "id", agg: "count" } },
       { kind: "column", title: "Approved documents by Project", table: "reviews_reviews", category: { table: "admin_projects", column: "name" }, value: { column: "approved_count", agg: "sum" }, limit: 12 },
     ],
@@ -496,7 +496,7 @@ export const TOOL_SPECS: ToolSpec[] = [
     ],
     charts: [
       { kind: "line", title: "# Submittals by Month", table: "submittalsacc_items", category: { column: "created_at", bucket: "month" }, value: { column: "id", agg: "count" } },
-      { kind: "bar", title: "# Submittals by Status", table: "submittalsacc_items", category: { table: "admin_projects", column: "name" }, value: { column: "id", agg: "count" }, series: { column: "status_value" }, limit: 12 },
+      { kind: "stackedBar", title: "# Submittals by Status", table: "submittalsacc_items", category: { table: "admin_projects", column: "name" }, value: { column: "id", agg: "count" }, series: { column: "status_value" }, limit: 12 },
       { kind: "column", title: "Submittal Responses", table: "submittalsacc_items", category: { column: "response_value" }, value: { column: "id", agg: "count" }, limit: 10 },
       { kind: "treemap", title: "Submittals by Type", table: "submittalsacc_items", category: { column: "type_value" }, value: { column: "id", agg: "count" }, limit: 12 },
       { kind: "table", title: "Longest Running Submittals", table: "submittalsacc_items", columns: [

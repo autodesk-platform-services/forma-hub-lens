@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { consumeState, exchangeCode, HubAccessError, setSessionCookie } from "@/lib/aps/auth";
+import { consumeBrowserState, exchangeCode, HubAccessError, OAUTH_STATE_COOKIE, setSessionCookie } from "@/lib/aps/auth";
 import { configProblems } from "@/lib/env";
 
 export const dynamic = "force-dynamic";
@@ -7,39 +7,44 @@ export const dynamic = "force-dynamic";
 /** Registered APS callback: http://localhost:3000/api/aps/callback */
 export async function GET(request: NextRequest) {
   if (configProblems().length > 0) {
-    return errorPage("This deployment's APS configuration is incomplete. Ask its operator to check the setup.");
+    return clearOAuthState(errorPage("This deployment's APS configuration is incomplete. Ask its operator to check the setup."));
   }
   const params = request.nextUrl.searchParams;
 
   const error = params.get("error");
   if (error) {
     const description = params.get("error_description") ?? "";
-    return errorPage(`Autodesk returned "${error}". ${description}`);
+    return clearOAuthState(errorPage(`Autodesk returned "${error}". ${description}`));
   }
 
   const code = params.get("code");
   const state = params.get("state");
   if (!code || !state) {
-    return errorPage("The callback was missing the authorization code or state parameter.");
+    return clearOAuthState(errorPage("The callback was missing the authorization code or state parameter."));
   }
-  if (!consumeState(state)) {
-    return errorPage(
+  if (!consumeBrowserState(state, request.cookies.get(OAUTH_STATE_COOKIE)?.value)) {
+    return clearOAuthState(errorPage(
       "State parameter did not match a pending sign-in. Start again from the sign-in button.",
-    );
+    ));
   }
 
   try {
     const session = await exchangeCode(code);
     await setSessionCookie(session.id);
-    return NextResponse.redirect(new URL("/", request.nextUrl.origin));
+    return clearOAuthState(NextResponse.redirect(new URL("/", request.nextUrl.origin)));
   } catch (cause) {
     if (cause instanceof HubAccessError) {
       // Authenticated fine, but not entitled to this hub. Say so plainly —
       // this is the expected outcome for anyone outside the hub, not a fault.
-      return errorPage(cause.message, "Access denied", 403);
+      return clearOAuthState(errorPage(cause.message, "Access denied", 403));
     }
-    return errorPage(cause instanceof Error ? cause.message : String(cause));
+    return clearOAuthState(errorPage(cause instanceof Error ? cause.message : String(cause)));
   }
+}
+
+function clearOAuthState(response: NextResponse): NextResponse {
+  response.cookies.set(OAUTH_STATE_COOKIE, "", { path: "/api/aps", maxAge: 0 });
+  return response;
 }
 
 function errorPage(
@@ -52,7 +57,7 @@ function errorPage(
   const hint =
     status === 403
       ? `<p style="color:#666;font-size:12px">If you believe you should have access, ask a hub
-         administrator to add your Autodesk account to this Forma hub, then sign in again.</p>`
+         administrator to verify your Hub Admin or Executive Overview access, then sign in again.</p>`
       : `<p style="color:#666;font-size:12px">Check that the APS app is a
          <strong>Traditional Web App</strong> and that this deployment's callback URL is
          registered on it.</p>`;

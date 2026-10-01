@@ -5,6 +5,9 @@
 
 # next.js
 /.next/
+/.next-preview/
+/.next-review/
+/.next-public-review/
 /out/
 next-env.d.ts
 *.tsbuildinfo
@@ -196,3 +199,7 @@ $RECYCLE.BIN/
 .env*
 !.env.example
 secrets.*
+
+# Handover package routes are source files, not .NET dependency artifacts.
+!/src/app/closeout/packages/
+!/src/app/closeout/packages/**

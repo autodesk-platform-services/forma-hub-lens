@@ -1,7 +1,11 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "lib": ["dom", "dom.iterable", "ES2023"],
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "ES2023"
+    ],
     "allowJs": false,
     "skipLibCheck": true,
     "strict": true,
@@ -16,9 +20,27 @@
     "allowImportingTsExtensions": true,
     "jsx": "preserve",
     "incremental": true,
-    "plugins": [{ "name": "next" }],
-    "paths": { "@/*": ["./src/*"] }
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ],
+    "paths": {
+      "@/*": [
+        "./src/*"
+      ]
+    }
   },
-  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
-  "exclude": ["node_modules"]
+  "include": [
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts",
+    "next-env.d.ts",
+    ".next-preview/types/**/*.ts",
+    ".next-review/types/**/*.ts",
+    ".next-public-review/types/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
 }
