@@ -4,7 +4,7 @@ Running this on localhost for yourself and running it for a team are different p
 
 Autodesk permission-checks calls made with the signed-in user's token, including Data Connector and Docs reads. Lens also uses an app-only token for exact hub-role verification, live offboarding directory lookup, and project archiving. Dashboards and activity views are served from this app's SQLite cache, so Autodesk does not check those cached reads.
 
-For shared deployment, access is gated on **Hub Admin or Executive Overview** for the configured hub. At sign-in and at least every 30 minutes while the session is used, the app verifies the Autodesk userinfo identity and finds one exact email match in that hub's account directory. Only `account_admin` or `executive` directory access levels are accepted. Hub administration writes and project sync repeat a live Hub Admin check. Autodesk applies its own endpoint entitlements to Data Connector and Docs operations.
+For shared deployment, access is gated on **Hub Admin or Executive Overview** for the configured hub. At sign-in and at least every 30 minutes while the session is used, the app verifies the Autodesk userinfo identity and finds one exact email match in that hub's account directory. Only `account_admin` or `executive` directory access levels are accepted. Hub administration, project sync, extract requests/scheduling/refresh/ingestion, shared dataset replacement, schema acknowledgement, closeout package downloads, and administrative audit pages/exports repeat a live Hub Admin check. Autodesk applies its own endpoint entitlements to Data Connector and Docs operations.
 
 The Autodesk OAuth callback also requires a one-use state value stored in an HttpOnly browser cookie for the sign-in that initiated it.
 
@@ -35,7 +35,13 @@ The SQLite filename is scoped to `FORMA_HUB_ID`, so changing hubs while reusing 
 
 APS can run recurring extract jobs while this app is offline, but Lens currently needs a person to refresh jobs and ingest each completed activity extract. Running on a persistent host alone does not enable automatic ingestion. That needs a separately designed background worker, scheduler, and recovery path.
 
-`GET /api/health` is the probe. It returns 503 while configuration is incomplete or the volume is not writable, 200 otherwise, and exposes no hub data.
+`GET /api/health` is the probe. It returns 503 while configuration is incomplete or the volume is not writable, 200 otherwise. Its uncached public response contains only a status, timestamp, and generic configuration/database check statuses; no environment names or values, table counts, filesystem paths, or hub data are returned.
+
+## Browser security headers
+
+Every route receives a baseline Content Security Policy, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, and `Referrer-Policy: no-referrer`. The CSP prevents framing and restricts browser resources to the app's origin, with local image data/blob URLs permitted. Next.js 15 hydration and chart styles still require inline scripts/styles; this baseline does not implement script nonces. Development additionally permits Next's debugging and HMR connections.
+
+In production, the HTTPS reverse proxy must set `x-forwarded-proto=https` so responses also receive HSTS (`max-age=31536000`) and CSP `upgrade-insecure-requests`. This policy covers the current hostname without committing subdomains to HSTS or requesting preload. Plain HTTP localhost retains working local assets and is not upgraded.
 
 ## Choosing a host
 

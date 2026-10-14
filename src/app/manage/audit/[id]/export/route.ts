@@ -1,4 +1,4 @@
-import { getSession } from "@/lib/aps/auth";
+import { HubAdminRequiredError, UnauthorizedError, requireHubAdminSession } from "@/lib/aps/auth";
 import { adminOperation, adminOperationItemCount, adminOperationItems } from "@/lib/adminOperations";
 import { csvCell } from "@/lib/csvExport";
 
@@ -8,9 +8,13 @@ export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
-  const session = await getSession();
-  if (!session) return new Response("Sign in required", { status: 401 });
-  if (session.hubRole !== "hub_admin") return new Response("Hub Admin required", { status: 403 });
+  try {
+    await requireHubAdminSession();
+  } catch (error) {
+    if (error instanceof UnauthorizedError) return new Response("Sign in required", { status: 401 });
+    if (error instanceof HubAdminRequiredError) return new Response("Hub Admin required", { status: 403 });
+    throw error;
+  }
   const { id } = await params;
   const operation = adminOperation(id);
   if (!operation) return new Response("Operation not found", { status: 404 });

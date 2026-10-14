@@ -13,7 +13,7 @@
 
 ## Objective
 
-Forma Hub Lens brings portfolio reporting, access review, Data Connector workflows, and bulk administration into one web app for a configured Autodesk Forma hub. **Hub Admin** and **Executive Overview** users can read the portfolio; live administration writes, project sync, and shared dataset replacement require a fresh Hub Admin check. Autodesk may impose additional permissions on individual APIs.
+Forma Hub Lens brings portfolio reporting, access review, Data Connector workflows, and bulk administration into one web app for a configured Autodesk Forma hub. **Hub Admin** and **Executive Overview** users can read the portfolio. Live administration, project sync, Data Connector request/schedule/refresh/ingestion, shared dataset replacement, schema acknowledgement, closeout package downloads, and administrative audit access require a fresh Hub Admin check. Autodesk may impose additional permissions on individual APIs.
 
 ## What it does
 
@@ -59,4 +59,4 @@ Open <http://localhost:3000> and sign in. Keep `.env.local` private; it is ignor
 
 ## Author
 
-[Autodesk Platform Services](https://github.com/autodesk-platform-services).
+[Matt Racher](https://github.com/rachermatt), [Autodesk Platform Services](https://github.com/autodesk-platform-services).

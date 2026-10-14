@@ -40,7 +40,7 @@ The **Extracts** page lets you:
 - ingest completed extracts, and
 - review the column-mapping report after ingestion.
 
-An account admitted as Hub Admin or Executive Overview can also create an **APS recurring request** with a relative activity window and refresh the cached request definitions, subject to Autodesk Data Connector permissions. For one-time or recurring requests, leave the optional project selector empty for a hub-wide extract, or select up to 50 projects. Autodesk requires Executive Overview for hub-wide extraction; project-scoped access depends on the signed-in user's project permissions. APS runs the schedule; this app does not ingest those jobs automatically. Use **Refresh jobs**, then **Ingest** on each completed activity job. The schedules table does not provide a verified next-run time, and this app does not offer pause or delete controls. A schedule absent from the latest complete APS refresh is labeled unverified rather than active.
+A **Hub Admin** can create an **APS recurring request** with a relative activity window and refresh the cached request definitions, subject to Autodesk Data Connector permissions. Lens repeats a live Hub Admin check before requesting or scheduling an extract, refreshing jobs or schedules, or ingesting completed activity/reporting data. Executive Overview users can view the cached extract and dashboard information. For one-time or recurring requests, leave the optional project selector empty for a hub-wide extract, or select up to 50 projects. Autodesk's own Data Connector entitlement and project permissions also apply. APS runs the schedule; this app does not ingest those jobs automatically. Use **Refresh jobs**, then **Ingest** on each completed activity job. The schedules table does not provide a verified next-run time, and this app does not offer pause or delete controls. A schedule absent from the latest complete APS refresh is labeled unverified rather than active.
 
 ## Tools
 
@@ -92,7 +92,7 @@ There is **no hub-wide "list roles" endpoint** in the Forma Admin API, so the Ro
 
 **Recipes** saves project creation defaults per signed-in Autodesk user and hub. Refresh native template projects, save a recipe, enter project names, inspect the generated names/job numbers in the preview, then execute. Project creation and template application are asynchronous. After Autodesk has activated the new projects, run **Sync projects**, follow the recipe's **Use saved member presets** link into Manage, select the active projects, and review the prefilled member emails, products, access level, and invitation-email setting. The existing **Add Members** preview and confirmation sends that separate import; recipe creation itself does not assign members. The link loads the *current saved recipe*, so review its values if you edited the recipe after project creation.
 
-The **Administrative audit** under Manage records only actions initiated by this app. Open an operation for per-item status or export its record. “Submitted” means Autodesk accepted an asynchronous request; it does not confirm that membership has finished applying.
+The **Administrative audit** under Manage records only actions initiated by this app. Its list, operation details, and exports require a fresh Hub Admin check. Open an operation for per-item status or export its record. “Submitted” means Autodesk accepted an asynchronous request; it does not confirm that membership has finished applying.
 
 ## Typical workflow
 
@@ -148,7 +148,7 @@ Copy `.env.example` to `.env.local` and fill it in. `.env.local` is gitignored �
 
 Data Connector requires a **user-context** token. A two-legged client-credentials token will not work for Data Connector because Autodesk scopes the extract to the signed-in user's hub permissions.
 
-Sign in with an account that holds **Hub Admin** or **Executive Overview** on the configured hub. At sign-in and periodically afterward, the app verifies the signed-in identity against that hub's account directory and denies other roles. Either admitted role can view portfolio reports and use Extracts and Tools dashboards when Autodesk grants the relevant Data Connector entitlement. Hub Admin is required for shared ZIP dataset replacement, project sync, recipe writes, offboarding, and live Manage operations. Autodesk may further limit live Docs reads to folders your account can access.
+Sign in with an account that holds **Hub Admin** or **Executive Overview** on the configured hub. At sign-in and periodically afterward, the app verifies the signed-in identity against that hub's account directory and denies other roles. Either admitted role can view portfolio reports, cached Extracts information, and Tools dashboards. A fresh Hub Admin check is required for extract requests, scheduling, job/schedule refreshes, activity/reporting ingestion, shared ZIP dataset replacement, project sync, recipe writes, offboarding, live Manage operations, schema acknowledgement, closeout package downloads, and administrative audit access. Autodesk may further limit API operations and live Docs reads to resources your account can access.
 
 Scopes requested:
 

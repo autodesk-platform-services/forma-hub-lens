@@ -48,7 +48,7 @@ export default async function CloseoutPackagePage({ params, searchParams }: {
         <div><dt className="text-adsk-gray">Size</dt><dd>{record.byteSize.toLocaleString()} bytes</dd></div>
         <div><dt className="text-adsk-gray">SHA-256</dt><dd className="break-all font-mono text-xs">{record.sha256}</dd></div>
       </dl>
-      <a href={`/closeout/packages/${encodeURIComponent(record.id)}/download`} className="mt-4 inline-block rounded bg-adsk-black px-4 py-2 text-sm text-white">Download verified ZIP</a>
+      {session.hubRole === "hub_admin" ? <a href={`/closeout/packages/${encodeURIComponent(record.id)}/download`} className="mt-4 inline-block rounded bg-adsk-black px-4 py-2 text-sm text-white">Download verified ZIP</a> : <p className="mt-4 text-sm text-adsk-gray">Hub Admin access is required to download this handover package.</p>}
       <p className="mt-3 text-xs text-adsk-gray">{manifest.statement}</p>
     </Card>
     <Card title="Evidence and record documents">

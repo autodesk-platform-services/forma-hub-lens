@@ -127,11 +127,11 @@ export default async function DataHealthPage() {
                 ))}
               </div>
             </details>
-            <form action={acknowledgeCurrentSchema}>
+            {session.hubRole === "hub_admin" ? <form action={acknowledgeCurrentSchema}>
               <button type="submit" className="rounded border border-adsk-lightgray px-3 py-1.5 text-xs hover:bg-adsk-offwhite">
                 Acknowledge current schema as baseline
               </button>
-            </form>
+            </form> : <p className="text-xs text-adsk-gray">A Hub Admin can acknowledge the current schema as the shared baseline.</p>}
           </div>
         )}
         <p className="mt-3 text-xs text-adsk-gray">
