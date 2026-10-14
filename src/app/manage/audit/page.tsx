@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getSession } from "@/lib/aps/auth";
+import { HubAdminRequiredError, UnauthorizedError, requireHubAdminSession } from "@/lib/aps/auth";
 import { configProblems } from "@/lib/env";
 import { recentAdminOperations } from "@/lib/adminOperations";
 import { Card, EmptyState, Pill, formatDateTime } from "@/components/ui";
@@ -19,10 +19,14 @@ const labels: Record<string, string> = {
 export default async function AdminAuditPage() {
   const problems = configProblems();
   if (problems.length) return <SetupRequired problems={problems} />;
-  const session = await getSession();
-  if (!session) return <SignInRequired />;
-  if (session.hubRole !== "hub_admin") {
-    return <Card><EmptyState title="Hub Admin access is required to view the administrative audit." /></Card>;
+  try {
+    await requireHubAdminSession();
+  } catch (error) {
+    if (error instanceof UnauthorizedError) return <SignInRequired />;
+    if (error instanceof HubAdminRequiredError) {
+      return <Card><EmptyState title="Hub Admin access is required to view the administrative audit." /></Card>;
+    }
+    throw error;
   }
   const operations = recentAdminOperations(100);
   return (

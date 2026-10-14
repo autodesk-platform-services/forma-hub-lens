@@ -22,6 +22,7 @@ export default async function ExtractsPage() {
   const session = await getSession();
   if (!session) return <SignInRequired />;
 
+  const admin = session.hubRole === "hub_admin";
   const jobs = storedJobs();
   const schedules = storedRequests().filter((request) =>
     request.scheduleInterval && request.scheduleInterval !== "ONE_TIME");
@@ -39,7 +40,7 @@ export default async function ExtractsPage() {
         </div>
         <div className="flex items-center gap-3">
           <Link href="/data-health" className="text-xs text-adsk-link underline">Data health</Link>
-          <ActionForm action={refreshJobs} label="Refresh jobs" pendingLabel="Refreshing…" />
+          {admin && <ActionForm action={refreshJobs} label="Refresh jobs" pendingLabel="Refreshing…" />}
         </div>
       </div>
 
@@ -53,7 +54,7 @@ export default async function ExtractsPage() {
         <p className="mt-1 text-[11px] text-adsk-gray">Based on jobs cached in Lens. Refresh jobs for the latest known APS status.</p>
       </section>
 
-      <><Card
+      {admin ? <><Card
         title="New data request"
         subtitle="One-time request, executed immediately. Hub limit is 24 jobs per 24 hours."
       >
@@ -62,11 +63,11 @@ export default async function ExtractsPage() {
 
       <Card title="Recurring APS request" subtitle="APS schedules future extract jobs. Ingestion into Lens remains a manual action.">
         <RecurringRequestForm jobsLastDay={lastDay} projects={projects} />
-      </Card></>
+      </Card></> : <Card title="Read-only extract history"><p className="text-xs text-adsk-gray">Executive Overview can inspect cached schedules and jobs. A Hub Admin is required to refresh APS data, request extracts, or ingest shared data.</p></Card>}
 
       <Card title="Recurring schedules"
         subtitle="Cached APS request definitions. Refresh to see schedules created or changed outside Lens."
-        action={<ActionForm action={refreshSchedules} label="Refresh schedules" pendingLabel="Refreshing…" />}>
+        action={admin ? <ActionForm action={refreshSchedules} label="Refresh schedules" pendingLabel="Refreshing…" /> : undefined}>
         {schedules.length === 0 ? (
           <EmptyState title="No recurring schedules cached.">
             Create one above or refresh APS request definitions.
@@ -182,14 +183,14 @@ export default async function ExtractsPage() {
                           <span className="text-[11px] text-adsk-black">
                             ingested {relativeTime(job.ingestedAt)}
                           </span>
-                          <ActionForm
+                          {admin && <ActionForm
                             action={ingestExtract}
                             label="Re-ingest"
                             pendingLabel="Ingesting…"
                             hidden={{ jobId: job.jobId }}
-                          />
+                          />}
                         </div>
-                      ) : (
+                      ) : admin ? (
                         <ActionForm
                           action={ingestExtract}
                           label="Ingest"
@@ -197,11 +198,11 @@ export default async function ExtractsPage() {
                           variant="primary"
                           hidden={{ jobId: job.jobId }}
                         />
-                      )}
+                      ) : <span className="text-[11px] text-adsk-gray">Not ingested</span>}
                       {job.ingestError && (
                         <p className="mt-1 max-w-[24rem] text-[10px] text-adsk-linkvisited">{job.ingestError}</p>
                       )}
-                      {session.hubRole === "hub_admin" && job.status === "complete" &&
+                      {admin && job.status === "complete" &&
                         (!job.completionStatus || job.completionStatus === "success") && <ActionForm
                           action={ingestReportingExtract}
                           label={reportingJobs.has(job.jobId) ? "Re-ingest reporting" : "Ingest reporting"}

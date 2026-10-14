@@ -1,6 +1,10 @@
 import type { NextConfig } from "next";
+import { securityHeaderRules } from "./src/lib/securityHeaders";
 
 const nextConfig: NextConfig = {
+  async headers() {
+    return securityHeaderRules(process.env.NODE_ENV);
+  },
   // Keep review output separate from the running local preview's build files.
   distDir: process.env.LENS_REVIEW_BUILD === "1" ? ".next-review"
     : process.env.LENS_PREVIEW_BUILD === "1" ? ".next-preview" : ".next",

@@ -7,7 +7,6 @@ import {
   destroySession,
   getSession,
   requireHubAdminSession,
-  requireSession,
 } from "@/lib/aps/auth";
 import { cachedProjects, syncProjects } from "@/lib/aps/admin";
 import {
@@ -65,7 +64,7 @@ export async function refreshJobs(
   _formData: FormData,
 ): Promise<ActionState> {
   try {
-    const session = await requireSession();
+    const session = await requireHubAdminSession();
     const jobs = await listJobs(session);
     rememberJobs(jobs);
     revalidatePath("/extracts");
@@ -81,7 +80,7 @@ export async function requestExtract(
   formData: FormData,
 ): Promise<ActionState> {
   try {
-    const session = await requireSession();
+    const session = await requireHubAdminSession();
 
     const serviceGroups = formData.getAll("serviceGroups").map(String).filter(Boolean);
     if (serviceGroups.length === 0) {
@@ -161,7 +160,7 @@ export async function refreshSchedules(
   _formData: FormData,
 ): Promise<ActionState> {
   try {
-    const session = await requireSession();
+    const session = await requireHubAdminSession();
     const requests = await listRequests(session);
     rememberRequests(requests, Date.now(), true);
     revalidatePath("/extracts");
@@ -176,7 +175,7 @@ export async function requestRecurringExtract(
   formData: FormData,
 ): Promise<ActionState> {
   try {
-    const session = await requireSession();
+    const session = await requireHubAdminSession();
     const fromInput = String(formData.get("effectiveFromUtc") ?? "");
     const toInput = String(formData.get("effectiveToUtc") ?? "");
     if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(fromInput) ||
@@ -229,11 +228,10 @@ export async function ingestExtract(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const jobId = String(formData.get("jobId") || "");
-  if (!jobId) return { ok: false, message: "Missing job id." };
-
   try {
-    const session = await requireSession();
+    const session = await requireHubAdminSession();
+    const jobId = String(formData.get("jobId") || "");
+    if (!jobId) return { ok: false, message: "Missing job id." };
 
     const job = await getJob(session, jobId);
     rememberJobs([job]);
