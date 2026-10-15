@@ -43,6 +43,12 @@ npm run dev
 
 Open <http://localhost:3000> and sign in. Keep `.env.local` private; it is ignored by Git. The app stores sessions and ingested hub data in a local SQLite directory, so use an approved persistent volume and access policy for shared deployment.
 
+## Continuous integration
+
+[GitHub Actions CI](https://github.com/autodesk-platform-services/forma-hub-lens/actions/workflows/ci.yml) runs on pull requests, pushes to `main`, and manual runs. Separate Windows and Linux jobs use Node.js 24 to install the lockfile dependencies, check TypeScript, run the complete regression suite, build the app, and exercise the development and production HTTP servers.
+
+The workflow uses fictional fixtures and build placeholders; no APS credentials or repository secrets are required. It does not deploy the app or call a real hub. A repository maintainer can make both platform checks required in the branch rules after their first successful run. See [the workflow](.github/workflows/ci.yml).
+
 ## Documentation
 
 - [Usage and local setup](docs/USAGE.md)
