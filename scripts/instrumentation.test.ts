@@ -3,7 +3,7 @@ import { spawnSync } from "node:child_process";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
-const loader = fileURLToPath(new URL("./resolve-ts.mjs", import.meta.url));
+const loader = new URL("./resolve-ts.mjs", import.meta.url).href;
 const entry = new URL("../src/instrumentation.ts", import.meta.url).href;
 
 /** Run the actual entry and Node worker in a clean process, replacing only their
