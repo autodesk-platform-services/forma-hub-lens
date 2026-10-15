@@ -175,7 +175,10 @@ Open <http://localhost:3000> and sign in.
 npm test                 # Regression tests for data, dashboards, authentication, and features
 npm run typecheck
 npm run build
+npm run test:server-smoke # requires a production build; checks dev/prod HTTP responses
 npm run sample-extract   # writes sample-extract.zip — a synthetic extract for trying the Tools tab
 ```
 
 `npm run test:dashboards` builds a synthetic extract with the real CSV and column names, ingests it, then asserts that every KPI and every chart on all 21 dashboards resolves and returns rows.
+
+The [CI workflow](../.github/workflows/ci.yml) runs install, typecheck, all tests, build, and HTTP smoke checks on Windows and Linux with Node.js 24. It triggers for pull requests and pushes to `main`, and can be run manually from GitHub's Actions tab after the workflow reaches the default branch. It uses fixture data and placeholder build settings, so no APS secrets or hub access are needed. The checks validate local behavior; testing a real Autodesk sign-in still requires the application's own APS configuration.
