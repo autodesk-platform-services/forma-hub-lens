@@ -1,4 +1,5 @@
 import "server-only";
+import { env } from "./env";
 
 import { getDb } from "./db";
 
@@ -95,7 +96,7 @@ function ensureTables(): void {
     interval_minutes INTEGER NOT NULL DEFAULT 360, last_run_at INTEGER, next_run_at INTEGER,
     last_error TEXT, running_until INTEGER
   );`);
-  getDb().prepare(`INSERT OR IGNORE INTO integration_monitor_state
+  if (!env.demoMode) getDb().prepare(`INSERT OR IGNORE INTO integration_monitor_state
     (id, enabled, interval_minutes, last_run_at, next_run_at, last_error, running_until)
     VALUES (1, 0, 360, NULL, NULL, NULL, NULL)`).run();
 }

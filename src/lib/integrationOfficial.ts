@@ -2,6 +2,7 @@ import "server-only";
 
 import { createHash } from "node:crypto";
 import { saveOfficialSnapshot, type OfficialSnapshot } from "./integrationStore";
+import { env } from "./env";
 
 export const OFFICIAL_SCHEMA_URL = "https://developer.api.autodesk.com/data-connector/v1/doc";
 export const OFFICIAL_CHANGES_URL = "https://developer.api.autodesk.com/data-connector/v1/doc/changes";
@@ -52,33 +53,8 @@ const ALLOWED_URLS = new Set([
 ]);
 
 /** Fixed Autodesk documentation endpoints only; never fetch a manifest-provided URL. */
-async function fetchOfficialJson(url: string): Promise<unknown> {
-  if (!ALLOWED_URLS.has(url)) throw new Error("This is not a configured Autodesk documentation endpoint.");
-  const response = await fetch(url, { headers: { Accept: "application/json" }, cache: "no-store" });
-  if (!response.ok) throw new Error(`Autodesk documentation returned HTTP ${response.status}.`);
-  const contentLength = Number(response.headers.get("Content-Length"));
-  if (Number.isFinite(contentLength) && contentLength > MAX_PUBLIC_DOC_BYTES) throw new Error("Autodesk documentation exceeds the 5 MB review limit.");
-  if (!response.body) throw new Error("Autodesk documentation returned no response body.");
-  const chunks: Uint8Array[] = [];
-  const reader = response.body.getReader();
-  let size = 0;
-  try {
-    for (;;) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      if (value) {
-        size += value.byteLength;
-        if (size > MAX_PUBLIC_DOC_BYTES) throw new Error("Autodesk documentation exceeds the 5 MB review limit.");
-        chunks.push(value);
-      }
-    }
-  } finally { reader.releaseLock(); }
-  const bytes = new Uint8Array(size);
-  let offset = 0;
-  for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.length; }
-  const text = new TextDecoder().decode(bytes);
-  try { return JSON.parse(text) as unknown; }
-  catch { throw new Error("Autodesk did not return machine-readable JSON. Open the published documentation link for review."); }
+async function fetchOfficialJson(_url: string): Promise<unknown> {
+  throw new Error("The demo uses sample schema notices. Autodesk documentation refresh is disabled.");
 }
 
 function storeFetched(kind: "schema" | "changes", sourceUrl: string, body: unknown): OfficialSnapshot {

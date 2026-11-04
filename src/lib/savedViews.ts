@@ -46,8 +46,9 @@ function ensureTables(): void {
   `);
 }
 
-/** Stable APS identity when available; no session ID fallback that changes at sign-in. */
-export function savedViewsOwner(session: Pick<Session, "userId" | "userEmail">): string | null {
+/** Demo preferences belong to this browser profile, never to an Autodesk account. */
+export function savedViewsOwner(session: Pick<Session, "userId" | "userEmail"> & Partial<Pick<Session, "mode">>): string | null {
+  if (session.mode === "demo" || session.userId === "synthetic-demo-visitor") return "demo:browser";
   const id = session.userId?.trim();
   if (id) return `autodesk:${id.toLowerCase()}`;
   const email = session.userEmail?.trim().toLowerCase();

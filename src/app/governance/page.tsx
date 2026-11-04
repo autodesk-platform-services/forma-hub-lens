@@ -6,13 +6,12 @@ import {
   normalizeSettings,
   type GovernanceFinding,
   type GovernanceRule,
-  type GovernanceSettings,
 } from "@/lib/governance";
 import { governanceDecisions, type ReviewDecision, type GovernanceChoice } from "@/lib/reviewDecisions";
 import { savedViewsOwner } from "@/lib/savedViews";
 import { Card, EmptyState, Pill, Stat, formatDateTime } from "@/components/ui";
 import { SetupRequired, SignInRequired } from "@/components/Gate";
-import { updateGovernanceDecision } from "./actions";
+import { DemoReviewControls } from "@/components/DemoPreferences";
 
 export const dynamic = "force-dynamic";
 
@@ -44,34 +43,12 @@ function feedback(params: PageParams): { text: string; error: boolean } | null {
   return error ? { text: error, error: true } : notice ? { text: notice, error: false } : null;
 }
 
-function ActionForm({ finding, settings, selectedRule, reviewed }: {
-  finding: GovernanceFinding;
-  settings: GovernanceSettings;
-  selectedRule: string;
-  reviewed: boolean;
-}) {
-  return <form action={updateGovernanceDecision} className="mt-2 flex flex-wrap gap-2">
-    <input type="hidden" name="projectId" value={finding.projectId} />
-    <input type="hidden" name="rule" value={finding.rule} />
-    <input type="hidden" name="filterRule" value={selectedRule} />
-    <input type="hidden" name="quietDays" value={settings.quietDays} />
-    <input type="hidden" name="largeMembership" value={settings.largeMembership} />
-    {reviewed ? (
-      <button type="submit" name="choice" value="reopen" className="rounded border border-adsk-lightgray px-2.5 py-1 text-[11px] text-adsk-black hover:bg-adsk-offwhite">Reopen finding</button>
-    ) : <>
-      <button type="submit" name="choice" value="acknowledged" className="rounded border border-adsk-lightgray px-2.5 py-1 text-[11px] text-adsk-black hover:bg-adsk-offwhite">Acknowledge</button>
-      <button type="submit" name="choice" value="snoozed" className="rounded border border-adsk-lightgray px-2.5 py-1 text-[11px] text-adsk-black hover:bg-adsk-offwhite">Snooze 30 days</button>
-      <button type="submit" name="choice" value="ignored" className="rounded border border-adsk-lightgray px-2.5 py-1 text-[11px] text-adsk-gray hover:bg-adsk-offwhite">Ignore for this project</button>
-    </>}
-  </form>;
-}
 
-function FindingRow({ finding, settings, selectedRule, decision, canSave }: {
+function FindingRow({ finding, decision, canSave, owner }: {
   finding: GovernanceFinding;
-  settings: GovernanceSettings;
-  selectedRule: string;
   decision?: Decision;
   canSave: boolean;
+  owner: string | null;
 }) {
   const status = decision?.choice === "snoozed"
     ? `Snoozed until ${formatDateTime(decision.untilAt)}`
@@ -83,7 +60,7 @@ function FindingRow({ finding, settings, selectedRule, decision, canSave }: {
     </div>
     <p className="mt-1 text-xs text-adsk-gray">{finding.explanation}</p>
     <p className="mt-1 text-[11px] text-adsk-gray">{finding.evidence.join(" · ")}</p>
-    {canSave && <ActionForm finding={finding} settings={settings} selectedRule={selectedRule} reviewed={Boolean(decision)} />}
+    {canSave && <DemoReviewControls owner={owner} area="governance" projectId={finding.projectId} rule={finding.rule} />}
   </li>;
 }
 
@@ -129,10 +106,8 @@ export default async function GovernancePage({ searchParams }: { searchParams: P
     </div>
 
     {message && <p role="status" className={`rounded border px-3 py-2 text-xs ${message.error ? "border-adsk-linkvisited bg-adsk-linkvisited/10" : "border-adsk-lightgray bg-adsk-white"}`}>{message.text}</p>}
-    {!owner && <p role="alert" className="rounded border border-adsk-gold bg-adsk-gold/10 px-3 py-2 text-xs">Autodesk did not provide a stable user ID or email. Review decisions cannot be saved for this sign-in.</p>}
-
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-      {RULES.map((rule) => <Stat key={rule.key} label={rule.label} value={String(openByRule.get(rule.key)?.length ?? 0)} hint="Open in your queue" />)}
+      {RULES.map((rule) => <Stat key={rule.key} label={rule.label} value={String(openByRule.get(rule.key)?.length ?? 0)} hint="Findings in the fixed sample" />)}
     </div>
 
     <Card title="Evidence and thresholds">
@@ -142,7 +117,7 @@ export default async function GovernancePage({ searchParams }: { searchParams: P
         <p>Known activity window: <strong className="text-adsk-black">{source.activityWindowStart?.slice(0, 10) ?? "unknown"} → {source.activityWindowEnd?.slice(0, 10) ?? "unknown"}</strong></p>
         <p>Activity jobs ingested: <strong className="text-adsk-black">{source.activityJobs}</strong></p>
       </div>
-      <p className="mt-3 text-xs text-adsk-gray">Extract windows may have gaps. No observed events does not prove no work occurred. Decisions below affect only your review queue and never change Autodesk project data.</p>
+      <p className="mt-3 text-xs text-adsk-gray">Extract windows may have gaps. No observed events does not prove no work occurred. Review decisions below are saved only in this browser and never change Autodesk project data. Summary counts describe the fixed sample; personal choices appear on each finding.</p>
       <form method="get" className="mt-4 flex flex-wrap items-end gap-3 text-xs">
         <label>Rule
           <select name="rule" defaultValue={selectedRule} className="mt-1 block rounded border border-adsk-lightgray bg-white px-2 py-1.5">
@@ -180,10 +155,10 @@ export default async function GovernancePage({ searchParams }: { searchParams: P
                   </summary>
                   <div className="border-t border-adsk-lightgray px-4 py-2">
                     <p className="mb-2 text-xs text-adsk-gray">{rule.summary}</p>
-                    <ul>{rows.slice(0, 10).map((finding) => <FindingRow key={finding.key} finding={finding} settings={settings} selectedRule={selectedRule} canSave={Boolean(owner)} />)}</ul>
+                    <ul>{rows.slice(0, 10).map((finding) => <FindingRow key={finding.key} finding={finding} canSave={Boolean(owner)} owner={owner} />)}</ul>
                     {rows.length > 10 && <details className="mt-2 border-t border-adsk-lightgray pt-2">
                       <summary className="cursor-pointer text-xs text-adsk-link">Show {rows.length - 10} more project{rows.length - 10 === 1 ? "" : "s"} in this rule</summary>
-                      <ul className="mt-2">{rows.slice(10).map((finding) => <FindingRow key={finding.key} finding={finding} settings={settings} selectedRule={selectedRule} canSave={Boolean(owner)} />)}</ul>
+                      <ul className="mt-2">{rows.slice(10).map((finding) => <FindingRow key={finding.key} finding={finding} canSave={Boolean(owner)} owner={owner} />)}</ul>
                     </details>}
                   </div>
                 </details>;
@@ -211,7 +186,7 @@ export default async function GovernancePage({ searchParams }: { searchParams: P
                   <span>{rule.label}</span><span className="tnum text-xs text-adsk-gray">{rows.length}</span>
                 </summary>
                 <ul className="border-t border-adsk-lightgray px-4 py-2">
-                  {rows.map((finding) => <FindingRow key={finding.key} finding={finding} settings={settings} selectedRule={selectedRule} decision={decisions.get(decisionKey(finding))} canSave={Boolean(owner)} />)}
+                  {rows.map((finding) => <FindingRow key={finding.key} finding={finding} decision={decisions.get(decisionKey(finding))} canSave={Boolean(owner)} owner={owner} />)}
                 </ul>
               </details>;
             })}</div>

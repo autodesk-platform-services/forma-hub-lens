@@ -1,10 +1,9 @@
 import "server-only";
 
 import { DatabaseSync } from "node:sqlite";
-import { createHash } from "node:crypto";
-import fs from "node:fs";
-import path from "node:path";
 import { env } from "./env";
+import { seedDemoDatabase } from "./demoSeed";
+import { initializeDemoReadSchemas } from "./demoReadSchemas";
 
 /**
  * Local cache for hub data.
@@ -220,17 +219,20 @@ function migrate(db: DatabaseSync): void {
   }
 }
 
+/** Every function instance opens the same fictional snapshot; no filesystem or session storage. */
 function open(): DatabaseSync {
-  const dir = path.resolve(process.cwd(), env.dataDir);
-  fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
-  // Keep cached hub data and sessions isolated if one DATA_DIR is reused with
-  // a different FORMA_HUB_ID. A hash also keeps the configured ID out of the
-  // filename and prevents it from being interpreted as a path component.
-  const hubKey = createHash("sha256").update(env.hubId.trim().toLowerCase()).digest("hex").slice(0, 24);
-  const db = new DatabaseSync(path.join(dir, `forma-console-${hubKey}.sqlite`));
-  db.exec(SCHEMA);
-  migrate(db);
-  return db;
+  const db = new DatabaseSync(":memory:");
+  try {
+    db.exec(SCHEMA);
+    migrate(db);
+    initializeDemoReadSchemas(db);
+    seedDemoDatabase(db, env.hubId);
+    db.exec("PRAGMA query_only = ON");
+    return db;
+  } catch (error) {
+    db.close();
+    throw error;
+  }
 }
 
 export function getDb(): DatabaseSync {
@@ -238,7 +240,7 @@ export function getDb(): DatabaseSync {
   return globalThis.__formaDb;
 }
 
-/** Close the process-local SQLite connection, including its WAL file handles. */
+/** Close the process-local, read-only synthetic snapshot. */
 export function closeDb(): void {
   if (!globalThis.__formaDb) return;
   globalThis.__formaDb.close();

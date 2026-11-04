@@ -1,29 +1,47 @@
 # Known limitations
 
-- **No live cross-project activity endpoint.** Activity depends on asynchronous Data Connector extracts and the local SQLite cache.
-- **Recurring APS requests do not auto-ingest.** Autodesk schedules future jobs, but Lens currently requires a user to refresh jobs and ingest completed activity CSVs. Persistent hosting alone does not add a background worker.
-- **Extraction is quota-limited.** Autodesk caps extraction at 24 jobs per hub per 24 hours and 24 per user.
-- **Activity history is limited to the last 12 months**, with a maximum 31-day window per request and replication lag of up to approximately 20 minutes.
-- **Dashboards represent the hub-level page of each Power BI template**, not every page or every visual in the source templates.
-- **Computed Power BI columns are not available in the CSV extracts.** The dashboard specs use the closest raw equivalent where necessary.
-- **There is no hub-wide roles endpoint.** The Roles view depends on `admin_project_roles.csv` from the uploaded extract.
-- **People and Access matrix are uploaded snapshots.** Missing, duplicate, or truncated Admin CSV records reduce coverage. Product rows join on exact IDs; `admin_project_roles.csv` defines roles but does not establish who holds them.
-- **Permission records are assignments, not effective access.** The Docs explorer shows folder assignments returned by Autodesk for folders visible to the signed-in user. It does not calculate all inherited, group, product, and user-specific access for a person.
-- **Governance and lifecycle findings are review prompts.** They use local project, activity, and workflow evidence; missing windows or tables can make quiet or clear projects appear incorrectly. Confirm current status and obligations in Forma.
-- **Offboarding removes project memberships only.** It does not deprovision the person's Autodesk organization account. Last observed activity comes from the local extract and may be incomplete.
-- **Provisioning recipes do not add members during project creation.** Their member, product, and access selections can prefill a separate reviewed Manage import after the project is active. Project creation and native template application may finish asynchronously.
-- **The administration audit is local to Lens.** It excludes actions made elsewhere, and an accepted asynchronous import is recorded as submitted until its final result is known in Autodesk.
-- **Saved views and watchlists are local bookmarks.** They do not refresh sources, detect changes, or send alerts.
-- **Data health is a local diagnostic.** Its 72-hour age threshold and CSV-header baseline do not verify Autodesk's source freshness, extract project coverage, or a complete source schema.
-- **Project archiving uses an older BIM 360 Account Admin endpoint.** The source implementation notes state that it works for the tested Forma hub even though Autodesk's compatibility table marks the endpoint as unsupported for Forma projects.
-- **There is no un-archive action in the UI.** Restoring a project requires the reverse status change in Forma or an additional implementation in this app.
-- **Product access mapping should be verified against the hub's entitlements** before a large import.
-- **The Tools CSV import caps each table at 400,000 rows.** The Tools page identifies truncated tables so dashboard totals can be interpreted accordingly.
-- **Activity CSV files over 400,000 rows are rejected individually.** Other valid files in the same completed job can still ingest.
-- **Serverless hosting is not supported without architectural changes** because the app depends on writable, persistent SQLite storage and extract uploads.
+## Synthetic portfolio only
 
-## Operational considerations
+All projects, members, companies, activity, permissions, jobs, tables, integration contracts, schema notices, and closeout evidence are fictional. Fixture dates and freshness indicators do not establish that Autodesk was queried. No displayed exception establishes real noncompliance, inactivity, access risk, integration breakage, or project completion.
 
-- **The cache holds real hub data** — both the activity cache and the uploaded CSV extract. `.data/` is gitignored; treat it as sensitive and delete it when you are done. Deleting it is safe because re-uploading and re-ingesting rebuilds it.
-- **Uploading an extract replaces the tables it contains** and leaves other tables alone. Mixing two extracts is therefore possible; upload a complete one to keep the picture consistent.
-- **Sessions are server-side.** The cookie is an opaque random ID; tokens live in SQLite, never in the browser. Refresh tokens are rotated on use.
+## Anonymous access
+
+Anyone can explore the demo without an Autodesk account, authentication session, or Forma hub role. The demo makes no APS API calls and stores no verified visitor identity or Autodesk tokens. It does not provide real-hub portfolio data or administrative capabilities. The separate live application still requires Autodesk sign-in, Hub Admin / Executive Overview access for portfolio data, and Hub Admin for administrative changes.
+
+Browser-local preferences have no account separation. People sharing a browser profile share its demo preferences. Deployment-provider request logs are governed by the provider's settings.
+
+## No live operations
+
+Unavailable operations include customer-data uploads, project/access refreshes, extraction requests or ingestion, organization edits, permission changes, public-schema capture, background monitoring, project scans, document downloads, package generation, transmittal creation, and owner acceptance.
+
+Retained shared modules demonstrate portions of the live architecture, but cannot make APS hub calls in this deployment. API metadata and fixture notices do not guarantee current Autodesk API availability or migration dates.
+
+## State and reset behavior
+
+The read dataset is seeded independently in each process from the same fictional October 1, 2026, 12:00 UTC snapshot and is immutable to visitors. It is not a mutable shared hub. Cold starts and redeployments reinitialize the same sample; browser-local preferences remain subject to the browser's storage behavior.
+
+Administrative simulations exist only in the current React view. Leaving or resetting that view restores its sample workspace and clears its simulated history. Other portfolio pages continue showing the immutable initial dataset.
+
+Saved views, watchlist entries, favorites, and review decisions are browser-local. They can disappear when browser storage is cleared or unavailable, do not synchronize across devices, and are not durable audit or acceptance records. Watchlists do not monitor changes or send notifications. Personal review decisions appear on individual rows and do not change the fixed sample portfolio counts. Resetting demo preferences clears saved views, watchlist entries, and review decisions; tool favorites remain separate.
+
+## Reporting limits
+
+Dashboard joins and counts depend on fixture tables and identity mappings. Missing or unresolved values remain visible rather than becoming facts about real users. Some source records are intentionally incomplete. Exported rows are fictional and are not a validated Autodesk reporting extract.
+
+Project members and active people are different metrics: assigned membership versus activity identities observed in a sample window. Product access records are not commercial subscription balances.
+
+## Integration Health limits
+
+Consumers declare their own dependencies in the live architecture; the public demo uses canned examples. It does not inspect downstream source code, Power BI refreshes, ETL systems, API traffic, or customer subscriptions. A readiness result demonstrates local evidence checks only; it is not production compatibility certification.
+
+There is no server scheduler, CDC monitor, or live deprecation feed in this deployment. Running the demo in a long-lived Dokku container does not enable monitoring or scheduled checks.
+
+## Closeout limits
+
+Sample turnover evidence does not establish document approval, asset completeness, regulatory compliance, or owner acceptance. Document examples are metadata, not downloaded file binaries. No actual package, signed acceptance, or immutable closeout history is produced by the demo.
+
+## Deployment limits
+
+No APS application, credentials, callback registration, session secret, real hub ID, or application environment variables are required. No persistent volume is needed. Preview URLs work without callback registration. Browser-local preferences are not a shared server store.
+
+The preferred [Dokku deployment](DOKKU.md) uses the organization's `demo` branch. This source change performs no deployment. The hosting administrator must switch the branch and fetch and build the new source; changing `LENS_MODE` on live `main`, restarting the app, or rebuilding an old checkout is insufficient. The private webhook sync secret remains unchanged. The `main` branch retains live authentication and authorization, and the personal repository and Vercel deployment remain unchanged.

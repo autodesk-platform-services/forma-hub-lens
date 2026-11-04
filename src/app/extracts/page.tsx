@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { getSession } from "@/lib/aps/auth";
 import { cachedProjects } from "@/lib/aps/admin";
-import { configProblems } from "@/lib/env";
+import { configProblems, env } from "@/lib/env";
 import { trustedReportingUploads } from "@/lib/dataset";
 import { jobsInLastDay, storedJobs, storedRequests, type StoredJob } from "@/lib/aps/dataConnector";
 import { columnReport } from "@/lib/ingest";
@@ -22,7 +22,7 @@ export default async function ExtractsPage() {
   const session = await getSession();
   if (!session) return <SignInRequired />;
 
-  const admin = session.hubRole === "hub_admin";
+  const demoMode = env.demoMode;
   const jobs = storedJobs();
   const schedules = storedRequests().filter((request) =>
     request.scheduleInterval && request.scheduleInterval !== "ONE_TIME");
@@ -36,15 +36,19 @@ export default async function ExtractsPage() {
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-lg font-semibold">Data Connector extracts</h1>
-          <p className="mt-0.5 max-w-prose text-xs text-adsk-gray">Forma has no live cross-project activity endpoint. Activity is delivered as asynchronous CSV extracts: submit a request, Autodesk spawns a job, then the finished extract is ingested into this console&apos;s local cache.</p>
+          <p className="mt-0.5 max-w-prose text-xs text-adsk-gray">
+            {demoMode
+              ? "Explore synthetic request, schedule, job, and ingestion examples. This demo does not submit or refresh Autodesk Data Connector jobs."
+              : "Forma has no live cross-project activity endpoint. Activity is delivered as asynchronous CSV extracts: submit a request, Autodesk spawns a job, then the finished extract is ingested into this console's local cache."}
+          </p>
         </div>
         <div className="flex items-center gap-3">
           <Link href="/data-health" className="text-xs text-adsk-link underline">Data health</Link>
-          {admin && <ActionForm action={refreshJobs} label="Refresh jobs" pendingLabel="Refreshing…" />}
+          {!demoMode && <ActionForm action={refreshJobs} label="Refresh jobs" pendingLabel="Refreshing…" />}
         </div>
       </div>
 
-      <section aria-label="Data Connector job use" className="rounded border border-adsk-lightgray bg-adsk-white px-4 py-3">
+      {!demoMode && <section aria-label="Data Connector job use" className="rounded border border-adsk-lightgray bg-adsk-white px-4 py-3">
         <div className="flex flex-wrap items-baseline justify-between gap-2 text-xs">
           <strong className="text-adsk-black">Data Connector jobs</strong>
           <span className="tnum text-adsk-gray">{lastDay} / 24 known jobs in the last 24 hours</span>
@@ -52,9 +56,9 @@ export default async function ExtractsPage() {
         <progress className="mt-2 h-2 w-full accent-adsk-yellow" max={24} value={Math.min(lastDay, 24)}
           aria-label="Known Data Connector jobs in the last 24 hours" />
         <p className="mt-1 text-[11px] text-adsk-gray">Based on jobs cached in Lens. Refresh jobs for the latest known APS status.</p>
-      </section>
+      </section>}
 
-      {admin ? <><Card
+      {!demoMode ? <><Card
         title="New data request"
         subtitle="One-time request, executed immediately. Hub limit is 24 jobs per 24 hours."
       >
@@ -63,14 +67,16 @@ export default async function ExtractsPage() {
 
       <Card title="Recurring APS request" subtitle="APS schedules future extract jobs. Ingestion into Lens remains a manual action.">
         <RecurringRequestForm jobsLastDay={lastDay} projects={projects} />
-      </Card></> : <Card title="Read-only extract history"><p className="text-xs text-adsk-gray">Executive Overview can inspect cached schedules and jobs. A Hub Admin is required to refresh APS data, request extracts, or ingest shared data.</p></Card>}
+      </Card></> : <Card title="Read-only sample workflow">
+        <p className="text-xs text-adsk-gray">The requests and jobs below are synthetic examples. Request creation, schedule changes, refresh, and ingestion are unavailable in this demo.</p>
+      </Card>}
 
       <Card title="Recurring schedules"
-        subtitle="Cached APS request definitions. Refresh to see schedules created or changed outside Lens."
-        action={admin ? <ActionForm action={refreshSchedules} label="Refresh schedules" pendingLabel="Refreshing…" /> : undefined}>
+        subtitle={demoMode ? "Synthetic examples of scheduled extract requests." : "Cached APS request definitions. Refresh to see schedules created or changed outside Lens."}
+        action={demoMode ? undefined : <ActionForm action={refreshSchedules} label="Refresh schedules" pendingLabel="Refreshing…" />}>
         {schedules.length === 0 ? (
-          <EmptyState title="No recurring schedules cached.">
-            Create one above or refresh APS request definitions.
+          <EmptyState title={demoMode ? "No sample schedules are available." : "No recurring schedules cached."}>
+            {demoMode ? "The demo owner can restore the synthetic data set." : "Create one above or refresh APS request definitions."}
           </EmptyState>
         ) : (
           <div className="overflow-x-auto">
@@ -108,7 +114,7 @@ export default async function ExtractsPage() {
                       {request.reoccuringInterval && request.reoccuringInterval !== 1 ? " × " + request.reoccuringInterval : ""}
                     </td>
                     <td className="py-2 pr-3">
-                      {!request.seenInLastRefresh ? <Pill tone="warn">not returned by APS</Pill> :
+                      {!request.seenInLastRefresh ? <Pill tone="warn">{demoMode ? "not in sample refresh" : "not returned by APS"}</Pill> :
                         request.isActive === true ? <Pill tone="good">active</Pill> :
                         request.isActive === false ? <Pill tone="warn">inactive</Pill> : <Pill>unknown</Pill>}
                     </td>
@@ -123,16 +129,20 @@ export default async function ExtractsPage() {
                 })}
               </tbody>
             </table>
-            <p className="mt-2 text-[11px] text-adsk-gray">APS does not provide a verified next-run time in this view. Refresh jobs separately to update outcomes. Pause or delete controls are unavailable because Lens has not requested the APS data:write scope.</p>
+            <p className="mt-2 text-[11px] text-adsk-gray">{demoMode
+              ? "These sample schedules and job outcomes are simulated. No APS next-run time or live schedule state is shown."
+              : "APS does not provide a verified next-run time in this view. Refresh jobs separately to update outcomes. Pause or delete controls are unavailable because Lens has not requested the APS data:write scope."}</p>
           </div>
         )}
       </Card>
 
-      <Card title="Jobs" subtitle={`${jobs.length} known · ${lastDay} created in the last 24h`}>
-        <p className="mb-3 text-xs text-adsk-gray">Activity ingest refreshes Lens activity views. Reporting ingest imports every CSV in a completed APS job into Tools and records its verified hub, request, project scope, and service groups. Both are manual actions.</p>
+      <Card title="Jobs" subtitle={demoMode ? `${jobs.length} synthetic examples` : `${jobs.length} known · ${lastDay} created in the last 24h`}>
+        <p className="mb-3 text-xs text-adsk-gray">{demoMode
+          ? "These statuses and ingestion results are sample records. No job on this page belongs to a real Autodesk hub."
+          : "Activity ingest refreshes Lens activity views. Reporting ingest imports every CSV in a completed APS job into Tools and records its verified hub, request, project scope, and service groups. Both are manual actions."}</p>
         {jobs.length === 0 ? (
-          <EmptyState title="No jobs yet.">
-            <p>Submit a request above, or press <strong>Refresh jobs</strong> to pull in jobs that were created outside this console.</p>
+          <EmptyState title={demoMode ? "No sample jobs are available." : "No jobs yet."}>
+            <p>{demoMode ? "The demo owner can restore the synthetic data set." : <>Submit a request above, or press <strong>Refresh jobs</strong> to pull in jobs that were created outside this console.</>}</p>
           </EmptyState>
         ) : (
           <div className="overflow-x-auto">
@@ -177,20 +187,23 @@ export default async function ExtractsPage() {
                       {job.activityRows > 0 ? job.activityRows.toLocaleString() : "—"}
                     </td>
                     <td className="py-2 pr-3">
-                      <div className="space-y-2">
+                      {demoMode ? <div className="space-y-1 text-[11px] text-adsk-gray">
+                        <p>{job.ingestedAt ? `Sample ingestion ${relativeTime(job.ingestedAt)}` : "Not ingested in the sample"}</p>
+                        {job.ingestError && <p className="max-w-[24rem] text-adsk-linkvisited">{job.ingestError}</p>}
+                      </div> : <div className="space-y-2">
                       {job.ingestedAt ? (
                         <div className="space-y-1">
                           <span className="text-[11px] text-adsk-black">
                             ingested {relativeTime(job.ingestedAt)}
                           </span>
-                          {admin && <ActionForm
+                          <ActionForm
                             action={ingestExtract}
                             label="Re-ingest"
                             pendingLabel="Ingesting…"
                             hidden={{ jobId: job.jobId }}
-                          />}
+                          />
                         </div>
-                      ) : admin ? (
+                      ) : (
                         <ActionForm
                           action={ingestExtract}
                           label="Ingest"
@@ -198,18 +211,18 @@ export default async function ExtractsPage() {
                           variant="primary"
                           hidden={{ jobId: job.jobId }}
                         />
-                      ) : <span className="text-[11px] text-adsk-gray">Not ingested</span>}
+                      )}
                       {job.ingestError && (
                         <p className="mt-1 max-w-[24rem] text-[10px] text-adsk-linkvisited">{job.ingestError}</p>
                       )}
-                      {admin && job.status === "complete" &&
+                      {session.hubRole === "hub_admin" && job.status === "complete" &&
                         (!job.completionStatus || job.completionStatus === "success") && <ActionForm
                           action={ingestReportingExtract}
                           label={reportingJobs.has(job.jobId) ? "Re-ingest reporting" : "Ingest reporting"}
                           pendingLabel="Importing reporting…"
                           hidden={{ jobId: job.jobId }}
                         />}
-                      </div>
+                      </div>}
                     </td>
                   </tr>
                 ))}

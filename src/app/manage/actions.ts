@@ -15,7 +15,6 @@ import {
   type AdminPlan, type PlanKind, type PlanPreview, type PlanSkip,
 } from "@/lib/adminOperations";
 import { readRoleDirectory } from "@/lib/organization";
-import { fetchLiveProjectNames, normalizedProjectName } from "@/lib/projectCreation";
 
 export type ManageState = {
   ok: boolean;
@@ -172,7 +171,7 @@ export async function bulkCreateProjects(_previous: ManageState, formData: FormD
     const rows = String(formData.get("projects") ?? "").split(/\r?\n/).map((line) => line.trim()).filter((line) => line && !line.startsWith("#"));
     if (!rows.length) throw new Error("List at least one project.");
     if (rows.length > 50) throw new Error("Create at most 50 projects at a time.");
-    const existing = new Set(cachedProjects().map((project) => normalizedProjectName(project.name)));
+    const existing = new Set(cachedProjects().map((project) => project.name.trim().toLowerCase()));
     const seen = new Set<string>();
     const targets: NewProject[] = [];
     const skips: PlanSkip[] = [];
@@ -184,7 +183,7 @@ export async function bulkCreateProjects(_previous: ManageState, formData: FormD
       const [name, type, jobNumber] = parts;
       const projectType = type || defaultType;
       if (!PROJECT_TYPES.includes(projectType)) throw new Error(`Line ${index + 1}: unsupported project type "${projectType}".`);
-      const key = normalizedProjectName(name);
+      const key = name.toLowerCase();
       if (seen.has(key) || existing.has(key)) {
         skips.push({ key: name, label: name, reason: seen.has(key) ? "Duplicate in this batch." : "Name already in synced hub list." });
         continue;
@@ -293,32 +292,13 @@ async function executePlan(kind: Exclude<PlanKind, "create_company" | "update_co
       }
     }
   } else if (plan.kind === "create_projects") {
-    let liveNames: Set<string> | null = null;
-    let liveCheckError: string | null = null;
-    try {
-      // A cached preview can be ten minutes old, so it is not a safe write guard.
-      liveNames = await fetchLiveProjectNames(session);
-    } catch (error) {
-      liveCheckError = `Could not recheck the complete live project list: ${describe(error)}. No project creation request was sent.`;
-    }
     for (const project of plan.targets) {
       const itemIndex = index++;
       startAdminItem(operationId, itemIndex, project.name, project.name);
-      if (!liveNames) {
-        finishAdminItem(operationId, itemIndex, "failed", liveCheckError!);
-        continue;
-      }
-      const key = normalizedProjectName(project.name);
-      if (liveNames.has(key)) {
-        finishAdminItem(operationId, itemIndex, "skipped", "Name already exists in the current Autodesk project list.");
-        details.push(`${project.name}: skipped — name exists in Autodesk`);
-        continue;
-      }
       try {
         const result = await createProject(session, project);
         // Autodesk creates projects asynchronously and returns a job ID. An
         // accepted request is not proof that the project became active.
-        liveNames.add(key); // Reserve accepted names for the rest of this batch.
         finishAdminItem(operationId, itemIndex, "submitted", result.jobId
           ? `Autodesk creation job ${result.jobId}; sync projects later to verify activation.`
           : "Autodesk accepted project creation; sync projects later to verify activation.");
@@ -328,7 +308,6 @@ async function executePlan(kind: Exclude<PlanKind, "create_company" | "update_co
         details.push(`${project.name}: FAILED — ${describe(error)}`);
       }
     }
-    if (liveCheckError) details.push(liveCheckError);
   } else if (plan.kind === "archive_projects") {
     const archived: string[] = [];
     for (const target of plan.targets) {

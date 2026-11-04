@@ -32,11 +32,13 @@ export function ToolsExplorer({
   datasetTables,
   datasetRows,
   favoritesKey,
+  demoMode = false,
 }: {
   tools: ToolCard[];
   datasetTables: number;
   datasetRows: number;
   favoritesKey: string | null;
+  demoMode?: boolean;
 }) {
   const [openId, setOpenId] = useState<string | null>(null);
   const [dashboard, setDashboard] = useState<Dashboard | null>(null);
@@ -144,13 +146,13 @@ export function ToolsExplorer({
           tools enabled
         </span>
         <span>
-          {datasetTables.toLocaleString()} loaded tables · {datasetRows.toLocaleString()} rows loaded
+          {datasetTables.toLocaleString()} {demoMode ? "sample" : "loaded"} tables · {datasetRows.toLocaleString()} {demoMode ? "sample rows" : "rows loaded"}
         </span>
       </div>
 
       {favoriteTools.length > 0 && <section className="mb-7">
         <h2 className="mb-3 font-legend text-sm text-adsk-black">★ My tools</h2>
-        <ToolGrid tools={favoriteTools} onOpen={openFromCard} favorites={favorites} onToggleFavorite={toggleFavorite} canFavorite={Boolean(favoritesKey)} />
+        <ToolGrid tools={favoriteTools} onOpen={openFromCard} favorites={favorites} onToggleFavorite={toggleFavorite} canFavorite={Boolean(favoritesKey)} demoMode={demoMode} />
       </section>}
       {TOOL_CATEGORIES.map((category) => {
         const group = category.ids.flatMap((id) => {
@@ -159,13 +161,13 @@ export function ToolsExplorer({
         });
         return group.length ? <section key={category.name} className="mb-7">
           <h2 className="mb-3 font-legend text-sm text-adsk-black">{category.name}</h2>
-          <ToolGrid tools={group} onOpen={openFromCard} favorites={favorites} onToggleFavorite={toggleFavorite} canFavorite={Boolean(favoritesKey)} />
+          <ToolGrid tools={group} onOpen={openFromCard} favorites={favorites} onToggleFavorite={toggleFavorite} canFavorite={Boolean(favoritesKey)} demoMode={demoMode} />
         </section> : null;
       })}
       {tools.some((tool) => !assigned.has(tool.id)) && <section className="mb-7">
         <h2 className="mb-3 font-legend text-sm text-adsk-black">Other tools</h2>
           <ToolGrid tools={tools.filter((tool) => !assigned.has(tool.id))} onOpen={openFromCard} favorites={favorites}
-          onToggleFavorite={toggleFavorite} canFavorite={Boolean(favoritesKey)} />
+          onToggleFavorite={toggleFavorite} canFavorite={Boolean(favoritesKey)} demoMode={demoMode} />
       </section>}
 
       <dialog
@@ -207,12 +209,12 @@ export function ToolsExplorer({
                   {error}
                 </p>
               )}
-              {dashboard && <DashboardBody dashboard={dashboard} />}
+              {dashboard && <DashboardBody dashboard={dashboard} demoMode={demoMode} />}
             </div>
 
             <footer className="flex shrink-0 items-center justify-between border-t border-adsk-lightgray bg-adsk-white px-4 py-2.5 sm:px-6">
               <span className="text-xs text-adsk-gray">
-                Autodesk Forma · Data Connector extract
+                {demoMode ? "Synthetic demo hub · sample dashboard" : "Autodesk Forma · Data Connector extract"}
               </span>
               <button
                 type="button"
@@ -235,12 +237,14 @@ function ToolGrid({
   favorites,
   onToggleFavorite,
   canFavorite,
+  demoMode,
 }: {
   tools: ToolCard[];
   onOpen: (tool: ToolCard) => void;
   favorites: string[];
   onToggleFavorite: (id: string) => void;
   canFavorite: boolean;
+  demoMode: boolean;
 }) {
   return (
     <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
@@ -268,9 +272,9 @@ function ToolGrid({
             </p>
             <p className="mt-2 text-[10px] text-adsk-gray">
               {tool.enabled ? (
-                <>{tool.rowCount.toLocaleString()} source rows</>
+                <>{tool.rowCount.toLocaleString()} {demoMode ? "sample rows" : "source rows"}</>
               ) : (
-                <>needs {tool.missing.slice(0, 2).join(", ")}.csv</>
+                <>{demoMode ? "sample table missing: " : "needs "}{tool.missing.slice(0, 2).join(", ")}{demoMode ? "" : ".csv"}</>
               )}
             </p>
           </button>
@@ -295,14 +299,14 @@ const TOOL_CATEGORIES: Array<{ name: string; ids: string[] }> = [
   { name: "Administration", ids: ["activities", "administration"] },
 ];
 
-function DashboardBody({ dashboard }: { dashboard: Dashboard }) {
+function DashboardBody({ dashboard, demoMode }: { dashboard: Dashboard; demoMode: boolean }) {
   const available = dashboard.kpis.filter((k) => k.available);
 
   return (
     <div className="space-y-5">
       {!dashboard.enabled && (
         <p className="rounded border border-adsk-gold bg-adsk-gold/10 px-4 py-2.5 text-xs text-adsk-black">
-          This tool&apos;s primary table ({dashboard.missing.join(", ")}.csv) is not in the uploaded extract,
+          This tool&apos;s primary table ({dashboard.missing.join(", ")}.csv) is not in the {demoMode ? "sample data set" : "uploaded extract"},
           so panels below fall back to whatever related tables are present.
         </p>
       )}

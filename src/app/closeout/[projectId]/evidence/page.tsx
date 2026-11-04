@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getSession } from "@/lib/aps/auth";
-import { configProblems } from "@/lib/env";
+import { configProblems, env } from "@/lib/env";
 import { closeoutProject, closeoutRecordId, collectCloseoutSources } from "@/lib/closeoutEngine";
 import { Card, formatDateTime } from "@/components/ui";
 import { SetupRequired, SignInRequired } from "@/components/Gate";
@@ -34,11 +34,11 @@ export default async function CloseoutEvidencePage({ params, searchParams }: {
   return <div className="space-y-5">
     <Link href={`/closeout/${encodeURIComponent(project.id)}`} className="text-xs text-adsk-link hover:underline">← {project.name} closeout</Link>
     <h1 className="font-legend text-2xl capitalize">{domain} evidence</h1>
-    <Card title="Source record" subtitle={`Latest local evidence collected ${formatDateTime(source.collectedAt)}. Source: ${source.kind}.`}>
-      <p className="text-xs text-adsk-gray">Revision: {source.revision ?? "Unknown"} · Coverage: {source.coverage} · Complete: {source.complete ? "Yes" : "No"}</p>
-      {source.note && <p role="note" className="mt-2 text-sm">{source.note}</p>}
+    <Card title="Source record" subtitle={env.demoMode ? "Sample data · fictional closeout evidence" : `Latest local evidence collected ${formatDateTime(source.collectedAt)}. Source: ${source.kind}.`}>
+      <p className="text-xs text-adsk-gray">{env.demoMode ? "Coverage: synthetic example" : `Revision: ${source.revision ?? "Unknown"} · Coverage: ${source.coverage}`} · Complete: {source.complete ? "Yes" : "No"}</p>
+      {!env.demoMode && source.note && <p role="note" className="mt-2 text-sm">{source.note}</p>}
       {!rows.length ? <p className="mt-3 text-sm">{recordId ? `Record ${recordId} is absent from this source. This may be the missing deliverable identified by the assessment.` : "No records in this source."}</p> :
-        <div className="mt-3 space-y-4">{rows.map((row, index) => { const href = source.kind === "live-aps" ? sourceLink(row) : null;
+        <div className="mt-3 space-y-4">{rows.map((row, index) => { const href = !env.demoMode && source.kind === "live-aps" ? sourceLink(row) : null;
           return <article key={index} className="rounded border border-adsk-lightgray p-3">
             <h2 className="font-medium">{String(row.name ?? row.title ?? row.id ?? "Record")}</h2>
             <dl className="mt-2 grid gap-2 text-xs sm:grid-cols-2">{["id", "version_id", "version_number", "folder_path", "status", "approval_status", "category", "location", "createdAt", "updatedAt", "document_count", "recipient_count"].filter((key) => row[key] != null).map((key) =>
@@ -48,7 +48,7 @@ export default async function CloseoutEvidencePage({ params, searchParams }: {
           </article>; })}</div>}
       {!recordId && source.rows.length > 50 && <p className="mt-3 text-xs text-adsk-gray">Showing 50 of {source.rowCount} source records. Open an exception to inspect its exact record.</p>}
     </Card>
-    {recordId && <Card title="Relationships and linked evidence" subtitle="Relationships describe only domains represented by Autodesk’s relationship service.">
+    {recordId && <Card title="Relationships and linked evidence" subtitle={env.demoMode ? "Fictional links between sample project records." : "Relationships describe only domains represented by Autodesk’s relationship service."}>
       {!connections?.complete && <p className="text-sm">Relationship coverage is incomplete or unavailable.</p>}
       {related.length ? <ul className="space-y-2 text-xs">{related.map((row, index) => <li key={index} className="rounded border p-3"><pre className="whitespace-pre-wrap break-all">{JSON.stringify(row, null, 2)}</pre></li>)}</ul>
         : <p className="text-sm text-adsk-gray">No matching relationships are recorded in the available evidence.</p>}

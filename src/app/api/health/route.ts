@@ -5,12 +5,8 @@ import { configProblems } from "@/lib/env";
 export const dynamic = "force-dynamic";
 
 /**
- * Liveness/readiness probe for container platforms.
- *
- * Reports unhealthy when config is incomplete or the cache volume isn't
- * writable — the two failures that otherwise show up as confusing runtime
- * errors after a deploy. Public responses contain only generic check statuses;
- * configuration names, values, filesystem paths and hub data stay private.
+ * Public readiness probe: configuration and immutable in-memory sample data only.
+ * Configuration names, values, filesystem paths and sample counts stay private.
  */
 export async function GET() {
   const problems = configProblems();

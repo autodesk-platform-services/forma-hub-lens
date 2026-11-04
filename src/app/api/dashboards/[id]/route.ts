@@ -11,7 +11,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const session = await getSession();
-  if (!session) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
+  if (!session) return NextResponse.json({ error: "Demo configuration is invalid" }, { status: 503 });
 
   const { id } = await params;
   const spec = specById(id);

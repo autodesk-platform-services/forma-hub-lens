@@ -10,7 +10,7 @@ export function FavoriteTools({ tools, storageKey }: { tools: ToolSummary[]; sto
     setFavorites(readToolFavorites(storageKey, new Set(tools.map((tool) => tool.id))));
   }, [storageKey, tools]);
 
-  if (!storageKey) return <p className="text-xs text-adsk-gray">A stable Autodesk identity is needed to save favorite tools.</p>;
+  if (!storageKey) return <p className="text-xs text-adsk-gray">Favorite tools are unavailable. Reload this page to try again.</p>;
   const selected = favorites.flatMap((id) => {
     const tool = tools.find((candidate) => candidate.id === id);
     return tool ? [tool] : [];

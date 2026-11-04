@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { getSession } from "@/lib/aps/auth";
-import { configProblems } from "@/lib/env";
+import { configProblems, env } from "@/lib/env";
 import {
   searchPortfolio,
   type CompanyHit,
@@ -14,7 +14,7 @@ import { savedViewsOwner } from "@/lib/savedViews";
 import { Card, EmptyState, Pill, formatDateTime } from "@/components/ui";
 import { ProvenanceBadge } from "@/components/ProvenanceBadge";
 import { SetupRequired, SignInRequired } from "@/components/Gate";
-import { addWatchAction } from "../views/actions";
+import { DemoWatchButton } from "@/components/DemoPreferences";
 
 export const dynamic = "force-dynamic";
 
@@ -44,7 +44,7 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
   const requestedPage = Number(value(params, "page"));
   const page = Number.isSafeInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
   const results = searchPortfolio(query, kind, page);
-  const canSave = Boolean(savedViewsOwner(session));
+  const canSave = savedViewsOwner(session);
   const savedPath = link(query, kind);
 
   return (
@@ -52,7 +52,11 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="font-legend text-2xl text-adsk-black">Search across the hub</h1>
-          <p className="mt-1 max-w-3xl text-sm text-adsk-gray">Search cached projects and uploaded people and company records. Results are paginated and show their source age; they are not live directory or access checks.</p>
+          <p className="mt-1 max-w-3xl text-sm text-adsk-gray">
+            {env.demoMode
+              ? "Search synthetic projects, people, and companies in the sample hub. Results are examples, not live Autodesk records."
+              : "Search cached projects and uploaded people and company records. Results are paginated and show their source age; they are not live directory or access checks."}
+          </p>
         </div>
         {query && canSave && <Link href={`/views?save=${encodeURIComponent(savedPath)}`} className="rounded border border-adsk-lightgray bg-adsk-white px-3 py-1.5 text-xs text-adsk-black">Save view</Link>}
       </div>
@@ -71,7 +75,9 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
 
       {!query ? (
         <Card><EmptyState title="Enter a search term to explore the portfolio.">
-          Project results come from the last Admin API sync. People and companies come from the uploaded Data Connector ZIP.
+          {env.demoMode
+            ? "All results in this deployment come from synthetic sample records."
+            : "Project results come from the last Admin API sync. People and companies come from the uploaded Data Connector ZIP."}
         </EmptyState></Card>
       ) : (
         <>
@@ -110,6 +116,9 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
 }
 
 function SourceLine<T>({ result }: { result: SearchResult<T> }) {
+  if (env.demoMode) return <div className="mb-3 text-[11px] text-adsk-gray">
+    <span className="rounded border border-adsk-gold bg-adsk-yellow/15 px-2 py-0.5 text-adsk-black">Sample data · synthetic hub records</span>
+  </div>;
   const source = result.source.label === "Forma Admin API project sync" ? "project-sync" : "user-zip";
   return (
     <div className="mb-3 text-[11px] text-adsk-gray">
@@ -122,13 +131,15 @@ function SourceLine<T>({ result }: { result: SearchResult<T> }) {
 }
 
 function ProjectResults({ result, query, preview, canSave }: {
-  result: SearchResult<ProjectHit>; query: string; preview: boolean; canSave: boolean;
+  result: SearchResult<ProjectHit>; query: string; preview: boolean; canSave: string | null;
 }) {
   const rows = preview ? result.rows.slice(0, 5) : result.rows;
   return (
     <Card title={`Projects (${result.total.toLocaleString()})`} action={preview && result.total > 5 ? <Link href={link(query, "projects")} className="text-xs text-adsk-link">View all</Link> : undefined}>
       <SourceLine result={result} />
-      {!result.source.available ? <EmptyState title="No project sync is available.">Use <Link href="/projects" className="text-adsk-link">Sync projects</Link> first.</EmptyState>
+      {!result.source.available ? <EmptyState title={env.demoMode ? "Sample projects are unavailable." : "No project sync is available."}>{env.demoMode
+        ? "The demo owner can restore the synthetic data set."
+        : <>Use <Link href="/projects" className="text-adsk-link">Sync projects</Link> first.</>}</EmptyState>
         : rows.length === 0 ? <EmptyState title="No projects match." /> : (
           <ul className="divide-y divide-adsk-offwhite">
             {rows.map((row) => (
@@ -136,9 +147,9 @@ function ProjectResults({ result, query, preview, canSave }: {
                 <div className="min-w-0">
                   <Link href={`/projects/${encodeURIComponent(row.id)}`} className="font-medium text-adsk-black hover:text-adsk-link">{row.name}</Link>
                   <div className="text-[11px] text-adsk-gray">{[row.status, row.type, row.jobNumber ? `Job ${row.jobNumber}` : null].filter(Boolean).join(" · ") || "No status"}</div>
-                  <div className="font-mono text-[10px] text-adsk-gray">{row.id} · synced {formatDateTime(row.syncedAt)}</div>
+                  <div className="font-mono text-[10px] text-adsk-gray">{row.id} · {env.demoMode ? "sample updated" : "synced"} {formatDateTime(row.syncedAt)}</div>
                 </div>
-                {canSave && <WatchButton kind="project" targetId={row.id} label={row.name} />}
+                {canSave && <WatchButton owner={canSave} kind="project" targetId={row.id} label={row.name} />}
               </li>
             ))}
           </ul>
@@ -148,13 +159,15 @@ function ProjectResults({ result, query, preview, canSave }: {
 }
 
 function PersonResults({ result, query, preview, canSave }: {
-  result: SearchResult<PersonHit>; query: string; preview: boolean; canSave: boolean;
+  result: SearchResult<PersonHit>; query: string; preview: boolean; canSave: string | null;
 }) {
   const rows = preview ? result.rows.slice(0, 5) : result.rows;
   return (
     <Card title={`People (${result.total.toLocaleString()})`} action={preview && result.total > 5 ? <Link href={link(query, "people")} className="text-xs text-adsk-link">View all</Link> : undefined}>
       <SourceLine result={result} />
-      {!result.source.available ? <EmptyState title="No user table is available.">Upload <code>admin_users.csv</code> through <Link href="/data-health#reporting-dataset" className="text-adsk-link">Data health</Link>.</EmptyState>
+      {!result.source.available ? <EmptyState title={env.demoMode ? "Sample people are unavailable." : "No user table is available."}>{env.demoMode
+        ? "The demo owner can restore the synthetic data set."
+        : <>Upload <code>admin_users.csv</code> through <Link href="/data-health#reporting-dataset" className="text-adsk-link">Data health</Link>.</>}</EmptyState>
         : rows.length === 0 ? <EmptyState title="No people match." /> : (
           <ul className="divide-y divide-adsk-offwhite">
             {rows.map((row, index) => (
@@ -165,7 +178,7 @@ function PersonResults({ result, query, preview, canSave }: {
                   <div className="text-[11px] text-adsk-gray">{row.email ?? "No email"}{row.status ? ` · ${row.status}` : ""}</div>
                   {(row.duplicateId || !row.id) && <Pill tone="warn">{row.duplicateId ? "Duplicate source ID" : "No source ID"}</Pill>}
                 </div>
-                {canSave && row.id && !row.duplicateId && <WatchButton kind="person" targetId={row.id} label={row.name ?? row.email ?? row.id} />}
+                {canSave && row.id && !row.duplicateId && <WatchButton owner={canSave} kind="person" targetId={row.id} label={row.name ?? row.email ?? row.id} />}
               </li>
             ))}
           </ul>
@@ -181,7 +194,9 @@ function CompanyResults({ result, query, preview }: {
   return (
     <Card title={`Companies (${result.total.toLocaleString()})`} action={preview && result.total > 5 ? <Link href={link(query, "companies")} className="text-xs text-adsk-link">View all</Link> : undefined}>
       <SourceLine result={result} />
-      {!result.source.available ? <EmptyState title="No company table is available.">Upload <code>admin_companies.csv</code> through <Link href="/data-health#reporting-dataset" className="text-adsk-link">Data health</Link>.</EmptyState>
+      {!result.source.available ? <EmptyState title={env.demoMode ? "Sample companies are unavailable." : "No company table is available."}>{env.demoMode
+        ? "The demo owner can restore the synthetic data set."
+        : <>Upload <code>admin_companies.csv</code> through <Link href="/data-health#reporting-dataset" className="text-adsk-link">Data health</Link>.</>}</EmptyState>
         : rows.length === 0 ? <EmptyState title="No companies match." /> : (
           <ul className="divide-y divide-adsk-offwhite">
             {rows.map((row, index) => (
@@ -200,15 +215,8 @@ function CompanyResults({ result, query, preview }: {
   );
 }
 
-function WatchButton({ kind, targetId, label }: { kind: "project" | "person"; targetId: string; label: string }) {
-  return (
-    <form action={addWatchAction}>
-      <input type="hidden" name="kind" value={kind} />
-      <input type="hidden" name="targetId" value={targetId} />
-      <input type="hidden" name="label" value={label} />
-      <button type="submit" className="shrink-0 rounded border border-adsk-lightgray px-2.5 py-1.5 text-[11px] text-adsk-gray hover:text-adsk-black">Watch</button>
-    </form>
-  );
+function WatchButton({ owner, kind, targetId, label }: { owner: string | null; kind: "project" | "person"; targetId: string; label: string }) {
+  return <DemoWatchButton owner={owner} kind={kind} targetId={targetId} label={label} />;
 }
 
 function Pager({ query, kind, page, total }: { query: string; kind: SearchKind; page: number; total: number }) {

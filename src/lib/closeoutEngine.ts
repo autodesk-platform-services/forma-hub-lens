@@ -163,14 +163,9 @@ export function assessCloseoutProject(projectId: string): CloseoutAssessment | n
   const profile = getCloseoutProfile(assignment.profileId);
   if (!profile) throw new Error("Assigned closeout profile no longer exists.");
   const required = new Set<CloseoutDomain>(profile.requiredDomains);
-  const selections = selectedCloseoutRecords(project.id);
   // Exact review-version evidence is also needed to validate selected Files.
   const needed = new Set(required);
   if (required.has("files")) needed.add("reviews");
-  if (selections.some((selection) => selection.domain === "files")) {
-    needed.add("files");
-    needed.add("reviews");
-  }
   if (profile.rules.files.length) needed.add("files");
   if (profile.rules.assets.length) needed.add("assets");
   if (profile.rules.relationships.length || profile.rules.assets.some((rule) => rule.requireDocumentRelationship)) {
@@ -189,6 +184,7 @@ export function assessCloseoutProject(projectId: string): CloseoutAssessment | n
   for (const policy of profile.rules.statusPolicies) needed.add(policy.domain);
   const sources = collectCloseoutSources(project.id).filter((source) => needed.has(source.domain));
   const expected = listExpectedDeliverables(profile.id, project.id);
+  const selections = selectedCloseoutRecords(project.id);
   const findings: CloseoutFinding[] = [];
   let blockerCount = 0;
   let unknownCount = 0;

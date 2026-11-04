@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 export async function GET(request: NextRequest) {
   try {
     if (!await getSession()) {
-      return NextResponse.json({ error: "Not signed in" }, { status: 401, headers: { "Cache-Control": "private, no-store" } });
+      return NextResponse.json({ error: "Demo configuration is invalid" }, { status: 503, headers: { "Cache-Control": "private, no-store" } });
     }
     const query = (request.nextUrl.searchParams.get("q") ?? "").trim().slice(0, 120);
     if (query.length < 2) {

@@ -29,7 +29,7 @@ export default async function IntegrationsPage() {
     <div className="flex flex-wrap items-end justify-between gap-3">
       <div><p className="mb-1 text-xs text-adsk-gray">Data / Integration Health</p>
         <h1 className="font-legend text-2xl text-adsk-black">Integration Health</h1>
-        <p className="mt-1 max-w-3xl text-sm text-adsk-gray">Track the extracts and fields each consumer needs, inspect published schema changes, and run evidence-based readiness checks before an Autodesk migration reaches your projects.</p>
+        <p className="mt-1 max-w-3xl text-sm text-adsk-gray">Explore how a fictional consumer manifest connects reporting fields, sample extracts, and migration readiness checks. No customer integration is monitored in this demo.</p>
       </div>
       {session.hubRole === "hub_admin" && <Link href="/integrations/new" className="rounded border border-adsk-gold bg-adsk-yellow px-3 py-1.5 text-xs font-medium text-adsk-black">New manifest</Link>}
     </div>
@@ -39,10 +39,10 @@ export default async function IntegrationsPage() {
       <Link href="/integrations/watch" className="rounded border border-adsk-lightgray bg-adsk-white px-3 py-2 text-adsk-link">API change watch →</Link>
     </nav>
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-      <Stat label="Integration manifests" value={String(manifests.length)} hint="Hub-wide Lens contracts" />
+      <Stat label="Integration manifests" value={String(manifests.length)} hint="Fictional consumer contracts" />
       <Stat label="Latest blocked preflights" value={String(blocked)} hint="Among stored runs" tone={blocked ? "bad" : "default"} />
       <Stat label="Need fresh run" value={String(unknown)} hint="Manifest or evidence changed" tone={unknown ? "warn" : "default"} />
-      <Stat label="Official schema capture" value={schema ? formatDateTime(schema.capturedAt) : "None"} hint="Public docs, captured by Lens" />
+      <Stat label="Sample schema snapshot" value={schema ? formatDateTime(schema.capturedAt) : "None"} hint="Bundled fictional example" />
     </div>
     <Card title="Consumer manifests" subtitle="Requirements are self-declared; preflight evidence identifies its own source and limits.">
       {runs.length === 0 ? <EmptyState title="No integrations registered.">A Hub Admin can create a manifest for a reporting template, API consumer, or customer pipeline.</EmptyState> :
@@ -58,14 +58,14 @@ export default async function IntegrationsPage() {
             <td className="py-2">{formatDateTime(manifest.updatedAt)}</td>
           </tr>)}</tbody></table></div>}
     </Card>
-    <Card title="Scheduled local checks" subtitle="Runs only while the Lens server and scheduler are active. Uses fixed public Autodesk documentation URLs and local snapshots; account-scoped APS inventory is refreshed separately by a Hub Admin.">
+    <Card title="Monitoring example" subtitle="Monitoring is disabled in this public demo. These fields illustrate the production workflow; no background checks run.">
       <div className="grid gap-3 text-xs sm:grid-cols-3"><div><strong>Status</strong><p className="mt-1 text-adsk-gray">{monitor.enabled ? "Enabled" : "Disabled"}</p></div><div><strong>Last run</strong><p className="mt-1 text-adsk-gray">{formatDateTime(monitor.lastRunAt)}</p></div><div><strong>Next due</strong><p className="mt-1 text-adsk-gray">{formatDateTime(monitor.nextRunAt)}</p></div></div>
       {monitor.lastError && <p role="alert" className="mt-3 rounded border border-adsk-gold bg-adsk-gold/10 px-3 py-2 text-xs">Last run errors: {monitor.lastError}</p>}
       {session.hubRole === "hub_admin" && <ActionForm action={configureIntegrationMonitorAction} label="Save monitor settings" className="mt-4 flex flex-wrap items-end gap-3">
         <label className="text-xs"><input type="checkbox" name="enabled" defaultChecked={monitor.enabled} className="mr-2" />Enable checks</label>
         <label className="text-xs text-adsk-gray">Interval (minutes)<input type="number" name="intervalMinutes" min={60} max={1440} step={60} defaultValue={monitor.intervalMinutes} className="ml-2 w-24 rounded border border-adsk-lightgray px-2 py-1" /></label>
       </ActionForm>}
-      <p className="mt-3 text-xs text-adsk-gray">Latest public change feed capture: {formatDateTime(changes?.capturedAt)}. A missing run or public-doc refresh error means no conclusion, not no changes.</p>
+      <p className="mt-3 text-xs text-adsk-gray">Sample change feed snapshot: {formatDateTime(changes?.capturedAt)}. Sample compatibility notices illustrate review; they do not validate a customer pipeline.</p>
     </Card>
   </div>;
 }

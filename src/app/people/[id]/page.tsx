@@ -8,7 +8,8 @@ import { getPerson, listAccessMatrix, peopleSourceStatus, personActivityObservat
 import { Card, EmptyState, Pill, formatDate, formatDateTime } from "@/components/ui";
 import { SetupRequired, SignInRequired } from "@/components/Gate";
 import { savedViewsOwner } from "@/lib/savedViews";
-import { addWatchAction } from "../../views/actions";
+import { DemoWatchButton } from "@/components/DemoPreferences";
+import { demoPersonAssociations } from "@/lib/demoData";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +24,7 @@ export default async function PersonPage({
   if (problems.length > 0) return <SetupRequired problems={problems} />;
   const session = await getSession();
   if (!session) return <SignInRequired />;
+  const demoMode = session.mode === "demo";
 
   const { id } = await params;
   const query = await searchParams;
@@ -32,7 +34,7 @@ export default async function PersonPage({
   const sources = peopleSourceStatus();
 
   if (lookup.state !== "found") {
-    const message = lookup.state === "ambiguous"
+    const message = demoMode ? "This person is not in the synthetic sample data set." : lookup.state === "ambiguous"
       ? "More than one admin_users.csv record has this source ID. This app will not merge their access."
       : lookup.state === "unavailable"
         ? "The uploaded user table has no usable ID column."
@@ -46,6 +48,7 @@ export default async function PersonPage({
   }
 
   const person = lookup.person;
+  const sampleAccess = demoMode ? demoPersonAssociations(person.id ?? id) : { products: [], roles: [] };
   const activity = personActivityObservation(person);
   const matrix = sources.matrixReady
     ? listAccessMatrix({ userId: id, page })
@@ -55,8 +58,8 @@ export default async function PersonPage({
   const userSource = sources.sources.find((source) => source.name === "admin_users");
   const membershipSource = sources.sources.find((source) => source.name === "admin_project_users");
   const syncedProjectIds = new Set(cachedProjects().map((project) => project.id.toLowerCase()));
-  const canCheckLive = session.hubRole === "hub_admin" && Boolean(person.email);
-  const liveRequested = query.live === "1" && session.hubRole === "hub_admin" && Boolean(person.email);
+  const canCheckLive = !demoMode && session.hubRole === "hub_admin" && Boolean(person.email);
+  const liveRequested = !demoMode && query.live === "1" && session.hubRole === "hub_admin" && Boolean(person.email);
   let live: OffboardingSummary | null = null;
   let liveError: string | null = null;
   if (liveRequested && person.email) {
@@ -75,28 +78,23 @@ export default async function PersonPage({
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="font-legend text-2xl text-adsk-black">{person.name ?? person.email ?? person.id}</h1>
-          <p className="mt-1 text-sm text-adsk-gray">{person.email ?? "No email in the uploaded user row"}</p>
+          <p className="mt-1 text-sm text-adsk-gray">{person.email ?? (demoMode ? "No sample email" : "No email in the uploaded user row")}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {person.id && <Link
             href={`${personUrl}/compare`}
             className="rounded border border-adsk-lightgray bg-adsk-white px-3 py-1.5 text-xs text-adsk-link"
           >Compare access</Link>}
-          {session.hubRole === "hub_admin" && person.email && <Link
+          {!demoMode && session.hubRole === "hub_admin" && person.email && <Link
             href={`${personUrl}?live=1`}
             className="rounded border border-adsk-lightgray bg-adsk-white px-3 py-1.5 text-xs text-adsk-link"
           >{liveRequested ? "Refresh current access" : "Check current access"}</Link>}
-          {session.hubRole === "hub_admin" && person.email && <Link
+          {(session.hubRole === "hub_admin" || demoMode) && person.email && <Link
             href={`/offboarding?email=${encodeURIComponent(person.email)}`}
             className="rounded border border-adsk-gold bg-adsk-yellow px-3 py-1.5 text-xs text-adsk-black"
-          >Plan access removal</Link>}
+          >{demoMode ? "Explore sample removal plan" : "Plan access removal"}</Link>}
           {person.id && savedViewsOwner(session) && (
-            <form action={addWatchAction}>
-              <input type="hidden" name="kind" value="person" />
-              <input type="hidden" name="targetId" value={person.id} />
-              <input type="hidden" name="label" value={person.name ?? person.email ?? person.id} />
-              <button type="submit" className="rounded border border-adsk-lightgray bg-adsk-white px-3 py-1.5 text-xs text-adsk-black">Add to watchlist</button>
-            </form>
+            <DemoWatchButton owner={savedViewsOwner(session)} kind="person" targetId={person.id} label={person.name ?? person.email ?? person.id} />
           )}
         </div>
       </div>
@@ -108,23 +106,27 @@ export default async function PersonPage({
         <Link href="#person-permissions" className="rounded px-2 py-1 text-adsk-link hover:bg-adsk-offwhite">Permissions</Link>
       </nav>
       <div role="note" className="rounded border border-adsk-gold bg-adsk-gold/10 px-4 py-3 text-xs text-adsk-black">
-        <>
+        {demoMode ? <>
+          This profile uses synthetic people, membership, product, role, and activity records. It does not show current Autodesk access.
+          {sources.warnings.length > 0 && <span> Some sample tables are missing or incomplete.</span>}
+          {person.email && <span> The removal plan is a simulation.</span>}
+        </> : <>
           This profile describes uploaded CSV data, not current Forma access. User table imported{" "}
           {formatDateTime(userSource?.uploadedAt)}; memberships imported{" "}
           {formatDateTime(membershipSource?.uploadedAt)}. Tables can come from different ZIPs.
           {sources.warnings.length > 0 && <span> Some source files are missing, incomplete or truncated.</span>}
           {session.hubRole === "hub_admin" && person.email && <span> Access removal starts with a separate live exact-email check and audited preview.</span>}
-        </>
+        </>}
       </div>
 
       <Card title="User record">
         <dl className="grid gap-x-6 gap-y-3 text-xs sm:grid-cols-2 lg:grid-cols-3">
-          <Field label="Data Connector user ID" value={person.id} />
-          <Field label="Autodesk ID" value={person.autodeskId} />
+          <Field label={demoMode ? "Sample user ID" : "Data Connector user ID"} value={person.id} />
+          <Field label={demoMode ? "Sample Autodesk ID" : "Autodesk ID"} value={person.autodeskId} />
           <Field label="Status" value={person.status} />
           <Field label="Email" value={person.email} />
           <div><dt className="font-medium uppercase tracking-wide text-adsk-gray">Company</dt><dd className="mt-1 break-all text-adsk-black">{person.companyId ? <Link href={`/companies/${encodeURIComponent(person.companyId)}`} className="text-adsk-link hover:underline">{person.companyId}</Link> : "—"}</dd></div>
-          <Field label="Last sign-in" value={formatDate(person.lastSignIn)} />
+          <Field label={demoMode ? "Sample last sign-in" : "Last sign-in"} value={formatDate(person.lastSignIn)} />
         </dl>
       </Card>
 
@@ -143,10 +145,10 @@ export default async function PersonPage({
         </>}
       </Card>}
 
-      <Card title="Project access" subtitle={`${matrix.total.toLocaleString()} snapshot membership records`}>
+      <Card title="Project access" subtitle={`${matrix.total.toLocaleString()} ${demoMode ? "sample" : "snapshot"} membership records`}>
         {!sources.matrixReady ? (
           <EmptyState title="Membership data unavailable.">
-            Upload an Insight Data Connector ZIP containing <code>admin_project_users.csv</code> with user and project IDs in <Link href="/data-health#reporting-dataset" className="text-adsk-link">Data health</Link>.
+            {demoMode ? "The demo owner can restore the synthetic membership table." : <>Upload an Insight Data Connector ZIP containing <code>admin_project_users.csv</code> with user and project IDs in <Link href="/data-health#reporting-dataset" className="text-adsk-link">Data health</Link>.</>}
           </EmptyState>
         ) : matrix.rows.length === 0 ? (
           <EmptyState title={page > 1 ? "No records on this page." : "No project memberships recorded for this user ID."} />
@@ -182,7 +184,9 @@ export default async function PersonPage({
           </div>
         )}
         <p className="mt-3 text-xs text-adsk-gray">
-          Product rows are joined by exact user and project IDs. Role definitions alone do not identify this person&apos;s role assignments.
+          {demoMode
+            ? "Sample product and role associations use exact synthetic user and project IDs. They do not describe current Autodesk access."
+            : <>Product rows are joined by exact user and project IDs. Role definitions alone do not identify this person&apos;s role assignments.</>}
         </p>
       </Card>
       {pages > 1 && (
@@ -196,24 +200,28 @@ export default async function PersonPage({
       )}
       </div>
 
-      <div id="person-products" className="scroll-mt-20"><Card title="Products" subtitle="Current associations when checked against the Forma Admin API">
-        {live ? live.products.length ? <ul className="space-y-1 text-xs">{live.products.map((product, index) => <li key={`${product.id ?? product.key ?? index}-${index}`} className="rounded border border-adsk-lightgray px-3 py-2">{product.name ?? product.key ?? product.id ?? "Unknown product"}{product.projectIds?.length ? <span className="ml-2 text-adsk-gray">{product.projectIds.length} project(s)</span> : null}</li>)}</ul> : <p className="text-xs text-adsk-gray">No product associations returned by Autodesk.</p>
+      <div id="person-products" className="scroll-mt-20"><Card title="Products" subtitle={demoMode ? "Synthetic product associations joined by exact sample user and project IDs" : "Current associations when checked against the Forma Admin API"}>
+        {demoMode ? sampleAccess.products.length ? <ul className="space-y-1 text-xs">{sampleAccess.products.map((product) => <li key={product.key} className="rounded border border-adsk-lightgray px-3 py-2">{product.name}<span className="ml-2 text-adsk-gray">{product.projectIds.length} sample project(s)</span></li>)}</ul> : <p className="text-xs text-adsk-gray">No sample product associations are recorded.</p>
+          : live ? live.products.length ? <ul className="space-y-1 text-xs">{live.products.map((product, index) => <li key={`${product.id ?? product.key ?? index}-${index}`} className="rounded border border-adsk-lightgray px-3 py-2">{product.name ?? product.key ?? product.id ?? "Unknown product"}{product.projectIds?.length ? <span className="ml-2 text-adsk-gray">{product.projectIds.length} project(s)</span> : null}</li>)}</ul> : <p className="text-xs text-adsk-gray">No product associations returned by Autodesk.</p>
           : <p className="text-xs text-adsk-gray">{liveError ?? (canCheckLive ? "Check current access to load product associations." : "Current associations require Hub Admin access and a known email address.")}</p>}
         {canCheckLive && !live && <Link href={`${personUrl}?live=1#person-products`} className="mt-2 inline-block text-xs text-adsk-link hover:underline">Check current access →</Link>}
       </Card></div>
 
-      <div id="person-roles" className="scroll-mt-20"><Card title="Roles" subtitle="Current associations when checked against the Forma Admin API">
-        {live ? live.roles.length ? <ul className="space-y-1 text-xs">{live.roles.map((role, index) => <li key={`${role.id ?? role.key ?? index}-${index}`} className="rounded border border-adsk-lightgray px-3 py-2">{role.name ?? role.key ?? role.id ?? "Unknown role"}{role.projectIds?.length ? <span className="ml-2 text-adsk-gray">{role.projectIds.length} project(s)</span> : null}</li>)}</ul> : <p className="text-xs text-adsk-gray">No role associations returned by Autodesk.</p>
+      <div id="person-roles" className="scroll-mt-20"><Card title="Roles" subtitle={demoMode ? "Synthetic role assignments joined by exact sample user and project IDs" : "Current associations when checked against the Forma Admin API"}>
+        {demoMode ? sampleAccess.roles.length ? <ul className="space-y-1 text-xs">{sampleAccess.roles.map((role) => <li key={role.key} className="rounded border border-adsk-lightgray px-3 py-2">{role.name}<span className="ml-2 text-adsk-gray">{role.projectIds.length} sample project(s)</span></li>)}</ul> : <p className="text-xs text-adsk-gray">No sample role assignments are recorded.</p>
+          : live ? live.roles.length ? <ul className="space-y-1 text-xs">{live.roles.map((role, index) => <li key={`${role.id ?? role.key ?? index}-${index}`} className="rounded border border-adsk-lightgray px-3 py-2">{role.name ?? role.key ?? role.id ?? "Unknown role"}{role.projectIds?.length ? <span className="ml-2 text-adsk-gray">{role.projectIds.length} project(s)</span> : null}</li>)}</ul> : <p className="text-xs text-adsk-gray">No role associations returned by Autodesk.</p>
           : <p className="text-xs text-adsk-gray">{liveError ?? (canCheckLive ? "Check current access to load role associations." : "Current associations require Hub Admin access and a known email address.")}</p>}
         {canCheckLive && !live && <Link href={`${personUrl}?live=1#person-roles`} className="mt-2 inline-block text-xs text-adsk-link hover:underline">Check current access →</Link>}
       </Card></div>
 
-      <div id="person-activity" className="scroll-mt-20"><Card title="Activity" subtitle="Observed in locally ingested Data Connector extracts">
+      <div id="person-activity" className="scroll-mt-20"><Card title="Activity" subtitle={demoMode ? "Observed in synthetic sample activity" : "Observed in locally ingested Data Connector extracts"}>
         <dl className="grid gap-3 text-xs sm:grid-cols-2">
           <Field label="Last observed activity" value={formatDateTime(activity.lastObservedAt)} />
           <Field label="Activity data through" value={formatDateTime(activity.activityDataThrough)} />
         </dl>
-        <p className="mt-3 text-xs text-adsk-gray">No matching event does not establish inactivity. Explorer searches actor fields as text and may return namesakes; verify the records.</p>
+        <p className="mt-3 text-xs text-adsk-gray">{demoMode
+          ? "These are sample events. Explorer searches synthetic actor fields as text and may return namesakes."
+          : "No matching event does not establish inactivity. Explorer searches actor fields as text and may return namesakes; verify the records."}</p>
         <Link href={`/activity?actor=${encodeURIComponent(person.autodeskId ?? person.email ?? person.id ?? id)}`} className="mt-2 inline-block text-xs text-adsk-link hover:underline">Search observed activity →</Link>
       </Card></div>
 

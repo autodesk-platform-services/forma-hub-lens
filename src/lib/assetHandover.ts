@@ -83,12 +83,12 @@ function addUnknown(target: AssetHandoverUnknown[], item: AssetHandoverUnknown):
 function safeMetadata(row: Record<string, unknown>): { values: Record<string, string>; truncated: boolean } {
   const result: Record<string, string> = {};
   let truncated = false;
-  const blocked = /(?:token|secret|password|authorization|credential|cookie|signed[_-]?url|download[_-]?url|api[_-]?key|bearer|(?:^|[_-])(?:url|href|link|links|uri)$)/i;
+  const blocked = /(?:token|secret|password|authorization|credential|cookie|signedurl|downloadurl|api[_-]?key|bearer|url$)/i;
   const controls = new Set(["project_id", "bim360_project_id", "relationships", "custom_attributes", "attributes", "_tipversion"]);
   const add = (key: string, value: unknown) => {
     if (blocked.test(key) || controls.has(key.toLowerCase()) || value == null || typeof value === "object") return;
     const text = string(value);
-    if (!text || /(?:https?:\/\/|data:|javascript:)/i.test(text)) return;
+    if (!text) return;
     if (Object.keys(result).length >= MAX_METADATA_FIELDS) { truncated = true; return; }
     if (text.length > MAX_METADATA_VALUE || key.length > 80) truncated = true;
     result[key.slice(0, 80)] = text.slice(0, MAX_METADATA_VALUE);

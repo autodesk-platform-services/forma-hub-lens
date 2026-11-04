@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { HubAdminRequiredError, UnauthorizedError, requireHubAdminSession } from "@/lib/aps/auth";
+import { getSession } from "@/lib/aps/auth";
 import { configProblems } from "@/lib/env";
 import { adminOperation, adminOperationItemCount, adminOperationItems } from "@/lib/adminOperations";
 import { Card, EmptyState, Pill, formatDateTime } from "@/components/ui";
@@ -16,14 +16,10 @@ export default async function AdminAuditDetail({
 }) {
   const problems = configProblems();
   if (problems.length) return <SetupRequired problems={problems} />;
-  try {
-    await requireHubAdminSession();
-  } catch (error) {
-    if (error instanceof UnauthorizedError) return <SignInRequired />;
-    if (error instanceof HubAdminRequiredError) {
-      return <Card><EmptyState title="Hub Admin access is required to view the administrative audit." /></Card>;
-    }
-    throw error;
+  const session = await getSession();
+  if (!session) return <SignInRequired />;
+  if (session.hubRole !== "hub_admin") {
+    return <Card><EmptyState title="Hub Admin access is required to view the administrative audit." /></Card>;
   }
   const { id } = await params;
   const query = await searchParams;

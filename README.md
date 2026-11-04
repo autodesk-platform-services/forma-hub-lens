@@ -1,55 +1,54 @@
-# Forma Hub Lens
+# Forma Hub Lens (Demo)
 
-![platforms](https://img.shields.io/badge/platform-local%20%7C%20container-lightgray.svg)
-[![Node.js](https://img.shields.io/badge/Node.js-22%2B-blue.svg)](https://nodejs.org)
+[![Node.js](https://img.shields.io/badge/Node.js-24-blue.svg)](https://nodejs.org)
 [![license](https://img.shields.io/:license-mit-green.svg)](LICENSE)
-[![Autodesk Forma](https://img.shields.io/badge/Autodesk%20Forma-Admin%20%7C%20Data%20Connector-lightblue.svg)](https://aps.autodesk.com/)
 ![Next.js](https://img.shields.io/badge/Next.js-15-black.svg)
 ![React](https://img.shields.io/badge/React-19-blue.svg)
-![TypeScript](https://img.shields.io/badge/TypeScript-5.9-blue.svg)
-![Level](https://img.shields.io/badge/Level-Intermediate-yellow.svg)
 
-![Forma Hub Lens overview illustration](thumbnail.png)
+A public, synthetic demonstration of Forma Hub Lens: one place to explore a Forma portfolio, investigate access and data, review closeout readiness, and practice controlled administrative workflows.
 
-## Objective
+**Synthetic demo hub — all data and administrative actions are simulated. No Autodesk sign-in required.**
 
-Forma Hub Lens brings portfolio reporting, access review, Data Connector workflows, and bulk administration into one web app for a configured Autodesk Forma hub. **Hub Admin** and **Executive Overview** users can read the portfolio. Live administration, project sync, Data Connector request/schedule/refresh/ingestion, shared dataset replacement, schema acknowledgement, closeout package downloads, and administrative audit access require a fresh Hub Admin check. Autodesk may impose additional permissions on individual APIs.
+Anyone can open the demo directly. No Autodesk account, hub membership, Hub Admin role, Executive Overview role, or Forma subscription is required. The projects, people, companies, dashboards, jobs, integration findings, and closeout evidence are fictional. This deployment makes no APS API calls.
 
-[Live demo](https://forma-hub-lens.autodesk.io)
+![Forma Hub Lens illustrative preview](thumbnail.png)
 
-## What it does
+## Try the demo
 
-- **Overview and Projects:** review project inventory, activity trends, lifecycle candidates, and source coverage.
-- **People and Access:** inspect uploaded membership and product records, compare people, and browse Docs folder permission assignments.
-- **Insights:** explore activity, tool dashboards, governance prompts, saved views, and cross-project search.
-- **Data:** request and ingest Data Connector jobs, inspect source health, and review integration and closeout evidence.
-- **Admin:** preview bulk member and project changes, manage companies, use project recipes, prepare offboarding, and inspect the local operation audit.
+Preferred public demo target: [forma-hub-lens.autodesk.io](https://forma-hub-lens.autodesk.io/), for deployment on Dokku from the organization's dedicated [`demo` branch](https://github.com/autodesk-platform-services/forma-hub-lens/tree/demo). This source change performs no Dokku deployment. A hosting administrator must switch the configured branch and manually pull and build the new demo source using the [deployment guide](docs/DEPLOYMENT.md).
 
-There are two independent reporting paths. **Extracts** requests APS Data Connector jobs and ingests completed activity CSVs into the local activity cache; full reporting CSVs from completed APS jobs can also populate dashboards with verified job lineage. Separately, a Hub Admin can download a ZIP from Autodesk Construction Cloud **Insight › Data Connector** and upload it on **Tools**. Lens labels the origin of a user-uploaded ZIP as unverified. **Sync projects** updates the project list and does not populate either reporting path.
+1. Open the public demo; no sign-in is required.
+2. Explore **Overview**, **Projects**, **People & Access**, **Insights**, **Data**, and **Admin**.
+3. Open a project, person, or company to follow its fictional relationships.
+4. Try **Admin → Bulk management**: configure, preview, confirm, and run a simulation.
+5. Use **Reset simulation** to restore that view's initial state.
 
-## Prerequisites
+All 21 tool dashboards are populated from the bundled sample dataset. Administrative simulations stay in the current browser view; they send no invitations, create no Autodesk projects, change no memberships, and assign no subscriptions. Reporting uploads, live scans, Data Connector requests, package generation, and Autodesk downloads are unavailable.
 
-- Node.js 22 or later and npm.
-- An APS **Traditional Web App** whose Client ID is provisioned for the target Forma account under **Hub Admin › Custom Integrations**. Follow [Autodesk's provisioning steps](https://get-started.aps.autodesk.com/#provision-access-in-other-products).
-- The Forma hub ID and a sign-in account with Hub Admin or Executive Overview access.
-- An APS OAuth callback registered exactly as `http://localhost:3000/api/aps/callback` for local use. This app runs on port **3000**.
+Saved views, watchlist bookmarks, review decisions, and tool favorites use browser-local storage. They do not synchronize across devices or create scheduled monitoring. See [source and persistence limits](docs/LIMITATIONS.md).
 
-## Quick start
+## Run locally
+
+Requires **Node.js 24.x** and npm. No APS application, credentials, callback registration, session secret, or environment file is required.
 
 ```bash
-npm install
-cp .env.example .env.local
-# Fill APS_CLIENT_ID, APS_CLIENT_SECRET, and FORMA_HUB_ID in .env.local.
+npm ci
 npm run dev
 ```
 
-Open <http://localhost:3000> and sign in. Keep `.env.local` private; it is ignored by Git. The app stores sessions and ingested hub data in a local SQLite directory, so use an approved persistent volume and access policy for shared deployment.
+Open [localhost:3000](http://localhost:3000). The sample data is loaded automatically; no extract upload or project sync is needed.
 
-## Continuous integration
+The optional settings in `.env.example` are `LENS_MODE=demo` (the default) and `LENS_LIVE_URL`, an external link to a separately hosted live application.
 
-[GitHub Actions CI](https://github.com/autodesk-platform-services/forma-hub-lens/actions/workflows/ci.yml) runs on pull requests, pushes to `main`, and manual runs. Separate Windows and Linux jobs use Node.js 24 to install the lockfile dependencies, check TypeScript, run the complete regression suite, build the app, and exercise the development and production HTTP servers.
+For public hosting, use the [Dokku deployment guide](docs/DOKKU.md). The production container uses Node.js 24, Next.js standalone output, and a non-root process. No persistent volume is required.
 
-The workflow uses fictional fixtures and build placeholders; no APS credentials or repository secrets are required. It does not deploy the app or call a real hub. A repository maintainer can make both platform checks required in the branch rules after their first successful run. See [the workflow](.github/workflows/ci.yml).
+## Separate from the live application
+
+The organization's [`demo` branch](https://github.com/autodesk-platform-services/forma-hub-lens/tree/demo) is the anonymous, synthetic build. Its [`main` branch](https://github.com/autodesk-platform-services/forma-hub-lens/tree/main) retains the live implementation. This build rejects live mode and does not use a real Forma hub ID. An optional **Live hub** header link opens a separately configured deployment; it does not change this app's authorization or dataset.
+
+The live application requires Autodesk sign-in, retains its Hub Admin / Executive Overview checks, and requires Hub Admin for administrative changes. The demo branch does not disable those checks on `main`. Changing `LENS_MODE` alone on an existing live `main` deployment will not install this demo; the administrator must fetch and rebuild the `demo` source. A restart or rebuild of an old checkout can keep serving the old code.
+
+The personal [rachermatt/forma-hub-lens-demo repository](https://github.com/rachermatt/forma-hub-lens-demo) and its [Vercel deployment](https://forma-hub-lens.vercel.app/) are unchanged by this branch and are an optional, separate hosting path.
 
 ## Documentation
 
@@ -57,14 +56,33 @@ The workflow uses fictional fixtures and build placeholders; no APS credentials 
 - [Feature guide and source limits](docs/FEATURES.md)
 - [Integration Health and Closeout workflows](docs/INTEGRATION-HEALTH-AND-CLOSEOUT.md)
 - [Architecture and APS endpoints](docs/ARCHITECTURE.md)
-- [Deployment considerations](docs/DEPLOYMENT.md)
+- [Deployment overview](docs/DEPLOYMENT.md)
+- [Dokku setup and branch switch](docs/DOKKU.md)
+- [Optional Vercel deployment](docs/VERCEL.md)
+- [Public demo boundaries](docs/PUBLIC-DEMO.md)
 - [Known limitations](docs/LIMITATIONS.md)
 - [Troubleshooting](docs/TROUBLESHOOTING.md)
 
-## License
+## Development checks
 
-[MIT](LICENSE). Copyright © 2026 Autodesk Platform Services.
+```bash
+npm run typecheck
+npm test
+npm run build
+npm run test:smoke
+```
 
-## Author
+Tests use synthetic fixtures and mocked responses; they require no APS credentials or Autodesk sign-in. After deployment, verify that the portfolio opens directly, the synthetic banner remains visible, and administrative actions are simulated.
 
-[Matt Racher](https://github.com/rachermatt), [Autodesk Platform Services](https://github.com/autodesk-platform-services).
+With Docker available, also check the production image:
+
+```bash
+docker build -t forma-hub-lens-demo .
+node scripts/smoke-container.mjs forma-hub-lens-demo
+```
+
+The container check uses a temporary local container and does not deploy to Dokku.
+
+## License and attribution
+
+[MIT](LICENSE). Original sample copyright © 2026 Autodesk Platform Services. This demo incorporates the synthetic sample maintained under [rachermatt](https://github.com/rachermatt). Autodesk and Forma are trademarks of Autodesk, Inc. The illustrative preview is not a screenshot of a customer hub.

@@ -1,13 +1,14 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireHubAdminSession } from "@/lib/aps/auth";
+import { getSession } from "@/lib/aps/auth";
 import { acknowledgeSchemaChanges } from "@/lib/dataHealth";
-import { configProblems } from "@/lib/env";
+import { configProblems, env } from "@/lib/env";
 
 export async function acknowledgeCurrentSchema(): Promise<void> {
+  if (env.demoMode) throw new Error("Schema acknowledgment is disabled for the shared sample dataset.");
   if (configProblems().length) throw new Error("Application setup is incomplete.");
-  await requireHubAdminSession();
+  if (!(await getSession())) throw new Error("Sign in as a hub administrator or Executive Overview user first.");
   acknowledgeSchemaChanges();
   revalidatePath("/data-health");
 }

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { HubAdminRequiredError, UnauthorizedError, requireHubAdminSession } from "@/lib/aps/auth";
+import { getSession } from "@/lib/aps/auth";
 import { configProblems } from "@/lib/env";
 import { recentAdminOperations } from "@/lib/adminOperations";
 import { Card, EmptyState, Pill, formatDateTime } from "@/components/ui";
@@ -19,14 +19,20 @@ const labels: Record<string, string> = {
 export default async function AdminAuditPage() {
   const problems = configProblems();
   if (problems.length) return <SetupRequired problems={problems} />;
-  try {
-    await requireHubAdminSession();
-  } catch (error) {
-    if (error instanceof UnauthorizedError) return <SignInRequired />;
-    if (error instanceof HubAdminRequiredError) {
-      return <Card><EmptyState title="Hub Admin access is required to view the administrative audit." /></Card>;
-    }
-    throw error;
+  const session = await getSession();
+  if (!session) return <SignInRequired />;
+  if (session.mode === "demo") return <div className="space-y-5">
+    <div>
+      <h1 className="text-lg font-semibold">Demo action history</h1>
+      <p className="mt-0.5 text-xs text-adsk-gray">Synthetic previews and outcomes in this browser session.</p>
+    </div>
+    <Card title="Simulated actions only">
+      <p className="text-sm text-adsk-gray">This public demo does not display the administrative audit of a live hub. Open the Demo action center to view the actions you have simulated in this browser session.</p>
+      <Link href="/manage#simulation-history" className="mt-3 inline-block text-xs text-adsk-link hover:underline">Open simulated action history →</Link>
+    </Card>
+  </div>;
+  if (session.hubRole !== "hub_admin") {
+    return <Card><EmptyState title="Hub Admin access is required to view the administrative audit." /></Card>;
   }
   const operations = recentAdminOperations(100);
   return (

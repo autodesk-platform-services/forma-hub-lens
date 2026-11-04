@@ -1,16 +1,12 @@
 import "server-only";
 
-import { configProblems, env } from "../env";
 import type { Session } from "./auth";
 
 export const APS_BASE = "https://developer.api.autodesk.com";
 
 /** This boundary covers all APS calls routed through apsFetch, including absolute URLs. */
-export function requireLiveApsSession(session: Pick<Session, "mode">): void {
-  if (configProblems().length) throw new Error("Live Autodesk hub configuration is incomplete.");
-  if (session.mode !== "live") {
-    throw new Error("Live Autodesk hub APIs require a live session.");
-  }
+export function requireLiveApsSession(_session: Pick<Session, "mode">): void {
+  throw new Error("Live Autodesk hub APIs are disabled in the public demo.");
 }
 
 export class ApsError extends Error {
@@ -64,54 +60,11 @@ type ApsFetchOptions = {
  */
 export async function apsFetch<T>(
   session: Session,
-  path: string,
-  options: ApsFetchOptions = {},
+  _path: string,
+  _options: ApsFetchOptions = {},
 ): Promise<T> {
   requireLiveApsSession(session);
-  const url = new URL(path.startsWith("http") ? path : `${APS_BASE}${path}`);
-  for (const [key, value] of Object.entries(options.searchParams ?? {})) {
-    if (value !== undefined && value !== "") url.searchParams.set(key, String(value));
-  }
-
-  const headers: Record<string, string> = {
-    Authorization: `Bearer ${session.accessToken}`,
-    Accept: "application/json",
-  };
-  if (options.body !== undefined) headers["Content-Type"] = "application/json";
-  if (options.regional && env.region) headers["Region"] = env.region;
-
-  const method = (options.method ?? "GET").toUpperCase();
-  const maxAttempts = method === "GET" || method === "HEAD" ? 3 : 1;
-
-  let lastError: ApsError | null = null;
-  for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    const res = await fetch(url, {
-      method,
-      headers,
-      body: options.body === undefined ? undefined : JSON.stringify(options.body),
-      cache: "no-store",
-      ...(options.timeoutMs ? { signal: AbortSignal.timeout(options.timeoutMs) } : {}),
-    });
-
-    if (res.ok) {
-      if (res.status === 204) return undefined as T;
-      return (await res.json()) as T;
-    }
-
-    const body = await res.text();
-    lastError = new ApsError(res.status, url.toString(), body);
-
-    const retryable = res.status === 429 || res.status >= 500;
-    if (!retryable || attempt === maxAttempts - 1) break;
-
-    const retryAfter = Number(res.headers.get("Retry-After"));
-    const waitMs = Number.isFinite(retryAfter) && retryAfter > 0
-      ? Math.min(retryAfter * 1000, 15_000)
-      : 500 * 2 ** attempt;
-    await new Promise((resolve) => setTimeout(resolve, waitMs));
-  }
-
-  throw lastError ?? new Error(`Request to ${url} failed`);
+  throw new Error("Live Autodesk hub APIs are disabled in the public demo.");
 }
 
 /** Walks an offset/limit paginated Forma collection to the end. */

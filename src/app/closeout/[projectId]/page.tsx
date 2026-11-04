@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getSession } from "@/lib/aps/auth";
-import { configProblems } from "@/lib/env";
+import { configProblems, env } from "@/lib/env";
 import { assessCloseoutProject, closeoutProject, closeoutRecordId, closeoutVersionId,
   collectCloseoutSources, type CloseoutAssessment } from "@/lib/closeoutEngine";
 import { CLOSEOUT_DOMAINS, getCloseoutAssignment, listCloseoutAssessments,
@@ -51,7 +51,9 @@ export default async function CloseoutProjectPage({ params, searchParams }: {
     <header><Link href="/closeout" className="text-xs text-adsk-link">← Closeout portfolio</Link>
       <h1 className="mt-2 font-legend text-2xl">{project.name}</h1>
       <p className="mt-1 text-xs text-adsk-gray">{project.id} · {project.status ?? "status unavailable"}</p>
-      <p className="mt-2 max-w-3xl text-sm text-adsk-gray">The current assessment is recalculated from the latest local evidence. Saved assessments and packages preserve what was reviewed at the time.</p>
+      <p className="mt-2 max-w-3xl text-sm text-adsk-gray">{env.demoMode
+        ? "Explore a closeout assessment using fictional documents, assets and work records. This sample is not an Autodesk project or an accepted handover."
+        : "The current assessment is recalculated from the latest local evidence. Saved assessments and packages preserve what was reviewed at the time."}</p>
     </header>
     {notice && <p role="status" className="rounded bg-green-50 p-3 text-sm">{notice}</p>}
     {error && <p role="alert" className="rounded bg-red-50 p-3 text-sm">{error}</p>}
@@ -65,7 +67,7 @@ export default async function CloseoutProjectPage({ params, searchParams }: {
         <button disabled={!profiles.length} className="rounded bg-adsk-black px-4 py-2 text-white disabled:opacity-40">Assign profile</button>
         <Link href="/closeout/profiles" className="text-adsk-link hover:underline">Manage profiles and deliverables</Link>
       </form>}
-      {!admin && <p className="mt-2 text-xs text-adsk-gray">Hub Admin access is required to change assignments.</p>}
+      {!admin && <p className="mt-2 text-xs text-adsk-gray">{env.demoMode ? "The sample profile and evidence are read-only." : "Hub Admin access is required to change assignments."}</p>}
     </Card>
     {assignedProfile && <Card title="Expected deliverables register">
       <p className="text-sm text-adsk-gray">Record what the client expects before the source record exists. Use an exact source ID when available, or a name pattern and exact folder. Unmatched expectations stay visible as exceptions.</p>
@@ -86,15 +88,15 @@ export default async function CloseoutProjectPage({ params, searchParams }: {
       </form>}
     </Card>}
     <Card title="2. Collect and verify source evidence">
-      <p className="text-sm text-adsk-gray">Authenticated APS scans are project scoped. CSV uploads need an explicit Hub Admin statement that the current revision covers this project. Missing, partial, truncated, or mixed evidence stays Unknown.</p>
+      <p className="text-sm text-adsk-gray">{env.demoMode ? "These sources are fictional examples stored in the demo database. No project evidence is fetched from Autodesk." : "Authenticated APS scans are project scoped. CSV uploads need an explicit Hub Admin statement that the current revision covers this project. Missing, partial, truncated, or mixed evidence stays Unknown."}</p>
       {admin && <form action={refreshEvidenceAction} className="mt-3"><input type="hidden" name="projectId" value={project.id} />
         <button className="rounded bg-adsk-black px-4 py-2 text-sm text-white">Refresh project evidence from APS</button></form>}
       <div className="mt-4 overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr className="border-b"><th className="py-2">Domain</th><th>Source</th><th>Rows</th><th>Coverage</th><th>Collected</th><th>Detail</th></tr></thead><tbody>
         {sources.filter((source) => assigned ? assessment?.profile.requiredDomains.includes(source.domain) ||
           (assessment?.profile.requiredDomains.includes("files") && source.domain === "reviews") : CLOSEOUT_DOMAINS.includes(source.domain)).map((source) =>
           <tr key={source.domain} className="border-b align-top"><td className="py-2 capitalize">{source.domain}</td>
-            <td>{source.kind}{source.table ? ` · ${source.table}` : ""}{!source.complete && <span className="block text-amber-800">Incomplete</span>}</td>
-            <td>{source.rowCount}</td><td>{source.coverage}</td><td>{date(source.collectedAt)}</td><td className="max-w-xs text-xs text-adsk-gray">{source.note ?? "—"}
+            <td>{env.demoMode ? "Sample data" : source.kind}{source.table ? ` · ${source.table}` : ""}{!source.complete && <span className="block text-amber-800">Incomplete</span>}</td>
+            <td>{source.rowCount}</td><td>{env.demoMode ? "Synthetic example" : source.coverage}</td><td>{date(source.collectedAt)}</td><td className="max-w-xs text-xs text-adsk-gray">{env.demoMode ? "Fictional source records; not verified APS evidence." : source.note ?? "—"}
               {admin && source.kind === "user-zip" && source.complete && source.revision && source.coverage !== "attested-upload" &&
                 <form action={attestSourceAction} className="mt-2 space-y-1">
                   <input type="hidden" name="projectId" value={project.id} /><input type="hidden" name="domain" value={source.domain} />
@@ -105,7 +107,7 @@ export default async function CloseoutProjectPage({ params, searchParams }: {
             </td></tr>)}</tbody></table></div>
     </Card>
     {assigned && <Card title="3. Select final record documents">
-      <p className="text-sm text-adsk-gray">Each choice pins an exact Files item, current version, and evidence revision. A binary enters the package only through authenticated APS retrieval of that version. Its approval must be linked to that exact version in Reviews.</p>
+      <p className="text-sm text-adsk-gray">{env.demoMode ? "This sample selection illustrates an exact document version and its approval evidence. It contains fictional file metadata and no downloaded Autodesk document." : "Each choice pins an exact Files item, current version, and evidence revision. A binary enters the package only through authenticated APS retrieval of that version. Its approval must be linked to that exact version in Reviews."}</p>
       {assessment?.selections.filter((selection) => selection.domain === "files").length ?
         <ul className="mt-3 space-y-1 text-sm">{assessment.selections.filter((selection) => selection.domain === "files").map((selection) =>
           <li key={selection.id} className="border-b pb-1"><strong>{selection.name}</strong> · item <code>{selection.externalId}</code> · version <code className="break-all">{selection.versionId ?? "missing"}</code>
@@ -154,7 +156,7 @@ export default async function CloseoutProjectPage({ params, searchParams }: {
       </> : <p className="text-sm text-adsk-gray">The assessment is unavailable.</p>}
     </Card>
     <Card title="5. Build package and review history">
-      <p className="text-sm text-adsk-gray">The ZIP contains manifest.json, a CSV and HTML inventory, exception register, and any exact APS file versions that passed download and integrity checks. Missing binaries remain explicit exceptions.</p>
+      <p className="text-sm text-adsk-gray">{env.demoMode ? "Live Lens can assemble a handover manifest, inventory, exception register and validated file versions. Package generation and Autodesk downloads are disabled in this demo." : "The ZIP contains manifest.json, a CSV and HTML inventory, exception register, and any exact APS file versions that passed download and integrity checks. Missing binaries remain explicit exceptions."}</p>
       {admin && assigned && <form action={buildPackageAction} className="mt-3"><input type="hidden" name="projectId" value={project.id} />
         <button className="rounded bg-adsk-black px-4 py-2 text-sm text-white">Build immutable package</button></form>}
       <h3 className="mt-5 font-medium">Packages</h3>

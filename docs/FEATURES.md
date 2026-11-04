@@ -1,28 +1,65 @@
-# Feature guide
+# Feature guide and source limits
 
-These features are implemented in this checkout. Their views combine live Autodesk responses, the last synced project inventory, ingested activity, and uploaded Insight Data Connector CSV tables. Check the source and timestamp shown on each page before acting on a result. Local tests cannot establish whether a particular hub grants every live API entitlement. See [Usage](USAGE.md) for the two separate extract workflows.
+This guide describes **Forma Hub Lens (Demo)**. All portfolio sources are bundled fictional fixtures. Anyone can open the demo directly without Autodesk sign-in; the demo makes no APS API calls.
 
-| # | Feature | Where | What is available now | Source and boundary |
-| --- | --- | --- | --- | --- |
-| 1 | People / User 360 | People (`/people`) | Search the user directory and open a person record with status, company ID, last sign-in, project memberships, access levels, and recorded product access. | Uploaded `admin_users.csv` and related Admin CSVs; a snapshot, not a live access check. Duplicate or missing IDs stay unresolved. |
-| 2 | Access matrix | People → **Access matrix** | Filter and page through user–project membership records, status, access level, and product rows. | Uploaded `admin_project_users.csv`, `admin_project_user_products.csv`, and `admin_projects.csv`; joins use exact IDs. Role *definitions* alone do not establish a person's role assignment. |
-| 3 | Offboarding | Offboarding (`/offboarding`) | Look up one exact email in the live hub directory, inspect project/product/role associations, then prepare project membership removal in batches. | Hub Admin access and a live Autodesk lookup are required. Removal uses the audited Manage preview; organization-wide Autodesk user deprovisioning remains outside this app. |
-| 4 | Governance exceptions | Governance (`/governance`) | Review quiet projects, past end dates, missing job numbers, large memberships, and projects with no recorded members; adjust thresholds. | Last project sync plus local activity. Findings are review prompts, not compliance determinations. Missing extract coverage can hide work. |
-| 5 | Project health | Projects (`/projects`) → project | Scorecards separate adoption, administration, data completeness, workflow backlog, lifecycle, and governance evidence. | Last project sync, known activity windows, and uploaded workflow tables. Zero observed open work does not prove closeout. |
-| 6 | Lifecycle manager | Lifecycle (`/lifecycle`) | Review possible archive candidates and archived inventory, then inspect a project's evidence before any action. | Candidate rules use past end dates or quiet activity with known coverage. Archiving itself goes through Hub Admin Manage preview; there is no automatic archive. |
-| 7 | Permissions explorer | Permissions (`/permissions`) | Browse accessible Docs folders and compare the returned subject/action assignments for two folders, including folders in different projects. | Live Autodesk Data Management/Docs GET APIs under the signed-in user. The diff compares assignment records only; it **does not compute effective access** or resolve inheritance. Unreadable and ambiguous records are called out. |
-| 8 | Provisioning recipes | Recipes (`/recipes`) | Save user-owned project defaults, refresh active native templates, preview project names and job numbers, and submit audited project creation. After activation and project sync, open Manage with the current recipe's member, product, access, and invitation-email defaults prefilled for a separate reviewed import. | Hub Admin writes. Project creation does not add those members; the administrator selects active projects, previews, and confirms the existing audited Add Members action. Autodesk returns a creation job ID, and the local audit records **submitted**; activation needs a later check. |
-| 9 | Recurring extracts | Extracts (`/extracts`) | Create an APS recurring request for the hub or up to 50 selected projects, refresh cached request definitions, and see known jobs. | Lens requires a fresh Hub Admin check for requests, scheduling, job/schedule refreshes, and activity/reporting ingestion; Autodesk permissions also apply. Executive Overview can view cached records. APS schedules the jobs. **Lens does not refresh or ingest in the background**. Automatic ingestion needs a persistent hosting and worker design. |
-| 10 | Data Connector health | Data health (`/data-health`) | Review known failed jobs, pending activity ingest, table age, truncation, missing tool sources, mixed local uploads, and CSV header changes from a local baseline. | Local cache only. The 72-hour stale threshold is a Lens review rule; the page links to Autodesk's public schema-change feed for manual review but does not parse it or verify full project coverage. |
-| 11 | Portfolio search | Search (`/search`) | Search and page through projects, people, and companies. | Projects come from the last Admin API sync; people and companies come from uploaded CSVs. Results show source age and are not live directory checks. |
-| 12 | Saved views / watchlist | Saved (`/views`) and Overview | Save Activity, People, Governance, or Search filters and bookmark project or person records for one Autodesk identity. Overview shows counts of those saved views and watched projects/people. | Stored in this app's SQLite file. Watchlist entries are bookmarks; there are no alerts, notifications, or source refreshes. |
-| 13 | Change preview / admin audit | Manage (`/manage`) → **Administrative audit** | Preview add/remove members, create projects, or archive projects; execute a single-use plan and inspect or export per-item outcomes. | Hub Admin only. Plans expire after ten minutes and live state is rechecked where supported. The ledger covers Lens-initiated operations, not every Autodesk admin action; accepted async imports and project creation are recorded as *submitted* until verified in Autodesk. |
+## Navigation
 
-## Start with the right source
+| Workspace | Demo experience |
+| --- | --- |
+| Overview | Sample portfolio KPIs, attention queue, observed activity, favorite tools |
+| Projects | Inventory, Project 360, lifecycle review, closeout readiness |
+| People & Access | People directory, Person 360, access matrix, folder permission examples, offboarding plans |
+| Insights | Tool dashboards, Activity explorer, Governance findings |
+| Data | Sample extracts, Data Health, Integration Health |
+| Admin | Browser-only bulk simulations, sample provisioning recipe, simulation history |
 
-1. Run **Sync projects** as a Hub Admin to load the project inventory. This feeds Projects, Search, Governance, Lifecycle, and project pickers.
-2. On **Extracts**, request activity data, refresh jobs, and ingest completed activity CSVs. This feeds Activity and observed usage on scorecards.
-3. Separately, a Hub Admin can export a ZIP from Autodesk Construction Cloud **Insight › Data Connector** and upload it on **Tools**. This feeds tool dashboards, People/Access matrix, company search, and workflow table observations. Lens labels user-uploaded data as **source hub unverified** because it cannot authenticate the ZIP's origin.
-4. Open **Data health** to check whether the local sources are missing, old, truncated, or drawn from different ZIP uploads.
+Global search connects projects, people, and companies. The Saved header control opens browser-local bookmarks and saved filters shared by visitors using that browser profile. Optional external deployment links never switch this build into live mode.
 
-An account with Executive Overview can view the locally cached portfolio pages, Extracts information, and Tools dashboards after the hub role gate. A fresh Hub Admin check is required for extract requests/scheduling/refresh/ingestion, shared ZIP dataset replacement, project sync, schema acknowledgement, closeout package downloads, administrative audit access, and live hub administration writes. Autodesk can further restrict live reads such as Docs folders to resources the signed-in user can access.
+## Thirteen foundational capabilities
+
+| Capability | Behavior in this demo |
+| --- | --- |
+| People / User 360 | Search sample members and inspect fictional projects, products, roles, companies, and activity |
+| Access Matrix | Compare sample membership and access across projects; administrative changes use the separate simulator |
+| Offboarding / access cleanup | Inspect a fictional person's associations and open a simulated removal plan |
+| Governance | Group sample exceptions and keep personal review decisions locally in the browser |
+| Project Health | Inspect activity, membership, workflow, lifecycle, and data indicators from the sample dataset |
+| Lifecycle | Review fictional archive candidates and evidence; decisions remain browser-local |
+| Permissions | Resolve sample user, role, and company assignments; no APS folder permission is changed |
+| Provisioning recipes | Read a sample healthcare standard and try project creation in the simulator |
+| Extract scheduling | Inspect fictional schedules and jobs; no extraction or scheduler runs |
+| Data Connector Health | Inspect sample coverage, table availability, schema examples, and freshness indicators |
+| Portfolio Search | Search the bundled project, person, and company records; no live hub query |
+| Saved Views / Watchlists | Save browser-local filters and bookmarks; no automated monitoring or notifications |
+| Change Preview / Audit | Configure, preview, confirm, simulate, and inspect results in the current view; no live administrative audit |
+
+## Tool dashboards
+
+All 21 dashboards use sample tables generated from a deterministic fixture generator:
+
+- Activities and Administration.
+- Assets, Forms, and Photos.
+- Issues, RFIs, Submittals, Meetings, and Reviews.
+- IQ and four Quality KPI views: Design & Document Review, Field Quality, Model Coordination, and Model Coordination Clash Report.
+- Cost, Cost KPIs, Estimate, and Takeoff.
+- Schedule and Schedule KPI.
+
+Dashboard groupings, joins, counts, totals, charts, and CSV exports illustrate a reporting experience; the dataset is not an Autodesk Power BI template validation suite or a customer extract. Some sample records are intentionally incomplete to demonstrate unknown values and exception handling.
+
+Chart labels wrap using normal text, legends retain status names, and time charts provide tabular values. Browser-local favorites appear on Overview.
+
+## Entity views
+
+**Project 360**, **Person 360**, and **Company 360** connect the fictional portfolio. Metrics describe the selected source and observation window. A project member count is assigned membership; active people counts observed activity identities. Neither is a commercial license balance.
+
+## Integration Health and Closeout
+
+Integration Health illustrates schema/migration mapping, extraction inventory, contract impacts, readiness checks, API dependency notices, and semantic trust tests. Closeout illustrates turnover profiles, project evidence, exact document versions, asset relationships, and blocker lists. These are read-only sample assessments. See the [workflow guide](INTEGRATION-HEALTH-AND-CLOSEOUT.md).
+
+## Data provenance
+
+Sample badges and the persistent demo banner identify the origin of portfolio data. Synthetic timestamps can be relative to the fixture clock, so a recent sample date is not evidence that Autodesk was queried. No Autodesk account or verified visitor identity is used.
+
+## Unavailable operations
+
+This build does not upload customer ZIPs, request or ingest real Data Connector jobs, refresh live access, scan real project evidence, modify organization records, run monitors, download Autodesk files, generate handover packages, or record owner acceptance. The organization's [`main` branch](https://github.com/autodesk-platform-services/forma-hub-lens/tree/main) retains its live authorization and deployment rules for supported operations.

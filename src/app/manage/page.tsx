@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { getSession } from "@/lib/aps/auth";
-import { configProblems } from "@/lib/env";
+import { configProblems, env } from "@/lib/env";
+import { listAccessMatrix, PEOPLE_PAGE_SIZE } from "@/lib/people";
+import { DemoActionCenter } from "@/components/DemoActionCenter";
+import type { DemoMember } from "@/lib/demoSimulation";
 import { cachedProjects } from "@/lib/aps/admin";
 import { fetchCompanies, PRODUCT_ACCESS_OPTIONS, PROJECT_TYPES, type Company } from "@/lib/aps/hubAdmin";
 import { readRoleDirectory } from "@/lib/organization";
@@ -30,6 +33,25 @@ export default async function ManagePage({
 
   const session = await getSession();
   if (!session) return <SignInRequired />;
+  if (env.demoMode && session.mode === "demo") {
+    const members = new Map<string, DemoMember>();
+    const first = listAccessMatrix({ page: 1 });
+    const rows = [...first.rows];
+    for (let page = 2; page <= Math.ceil(first.total / PEOPLE_PAGE_SIZE); page++) {
+      rows.push(...listAccessMatrix({ page }).rows);
+    }
+    for (const row of rows) {
+      if (!row.email || !row.projectId) continue;
+      const member = members.get(row.email) ?? { email: row.email, name: row.userName ?? row.email, projectIds: [] };
+      if (!member.projectIds.includes(row.projectId)) member.projectIds.push(row.projectId);
+      members.set(row.email, member);
+    }
+    const query = await searchParams;
+    return <DemoActionCenter initial={{ projects: cachedProjects().map(({ id, name, status }) => ({ id, name, status: status ?? "unknown" })), members: [...members.values()] }}
+      initialTask={typeof query.task === "string" ? query.task : undefined}
+      initialEmail={typeof query.email === "string" ? query.email.slice(0, 254) : undefined}
+      productOptions={PRODUCT_ACCESS_OPTIONS.map((option) => ({ key: option.label, label: option.label }))} />;
+  }
   if (session.hubRole !== "hub_admin") {
     return <Card title="Hub Admin access required">
       <p className="text-sm text-adsk-gray">Executive Overview access can view portfolio reports. Hub management actions require Hub Admin access.</p>

@@ -1,184 +1,55 @@
-# Usage
+# Usage and local setup
 
-## Overview
+## What this build does
 
-The **Overview** page shows hub-wide totals, events per day, busiest projects and people, and which projects have *no* activity in the ingested window.
+Forma Hub Lens (Demo) lets anyone explore a fictional portfolio directly in the browser. No Autodesk account or sign-in is required. Every hub record and administrative result is simulated, and the app makes no APS API calls.
 
-Its **Saved portfolio** card shows this Autodesk identity's counts of saved views, watched projects, and watched people, with a link to **Saved**. These are local bookmarks; the counts do not indicate alerts or changes in Autodesk data.
+The banner remains visible throughout the application:
 
-- `Sync projects` pulls the hub project list from the Admin API.
-- `Refresh jobs` pulls Data Connector job state.
-- The page also shows the running Data Connector extraction count, which matters because Autodesk caps extraction at 24 jobs per hub per 24 hours and 24 per user.
+> Synthetic demo hub — all data and administrative actions are simulated. No Autodesk sign-in required.
 
-## Projects
+No Hub Admin or Executive Overview role is required in the demo. The live application on the organization's [`main` branch](https://github.com/autodesk-platform-services/forma-hub-lens/tree/main) requires Autodesk sign-in and still enforces those roles. This anonymous build lives on its dedicated [`demo` branch](https://github.com/autodesk-platform-services/forma-hub-lens/tree/demo).
 
-The **Projects** page shows every project from the Admin API joined against ingested activity, including:
+## Local setup
 
-- events,
-- distinct people,
-- last event,
-- services touched,
-- member counts, and
-- sheet counts.
+1. Install Node.js 24.x and npm.
+2. Run `npm ci` from the repository root.
+3. Run `npm run dev` and open [localhost:3000](http://localhost:3000).
 
-Click a project to open its scorecard, then follow **Investigate activity** to filter Activity to that project.
+No environment file, APS application, credentials, callback registration, or session secret is required. Optional settings are `LENS_MODE=demo` (the default) and `LENS_LIVE_URL` for an external live-deployment link. Do not configure a real hub ID or copy live credentials into this demo. Local environment files are excluded from Git.
 
-Open a project's **scorecard** to compare observed activity, project metadata, extract coverage, workflow backlog from uploaded tables, lifecycle checks, and governance prompts. The sections identify which local source supplies each observation. A count of zero in an incomplete extract is not proof that the live project is clear.
+## Suggested walkthrough
 
-## Activity
+### Observe
 
-The **Activity** page is the event explorer. Filter by date, project, service, action, person, or free text. Free-text search also searches the untouched source row.
+Start at **Overview** for sample KPIs, the attention queue, favorite tools, and activity summaries. The fictional snapshot is fixed at October 1, 2026, 12:00 UTC and is reproduced across cold starts. Dates and freshness badges belong to that snapshot; they do not report a live Autodesk refresh.
 
-`Export CSV` downloads exactly what is on screen, including filters. Every row can be expanded to show the raw extract row.
+Open **Projects → Project inventory**. **Project members** counts assigned fictional memberships. **Active people (observed)** counts distinct identities seen in the sample activity window. These are different metrics. Use sorting to compare members, observed activity, services, or sheets, then open a project profile.
 
-## Extracts
+### Investigate
 
-The **Extracts** page lets you:
+Use **People & Access** for the directory, access matrix, permission explorer, and offboarding plan examples. Person and company profiles connect the sample relationships. Every displayed portfolio identity is fictional.
 
-- submit a Data Connector data request,
-- watch jobs,
-- ingest completed extracts, and
-- review the column-mapping report after ingestion.
+Under **Insights**, open any of the 21 tool dashboards, filter **Activity**, or inspect grouped **Governance** findings. Multi-selection uses checkboxes and Select all shown. No observed activity is a sample-window observation, not a finding that a real project is inactive. Personal governance and lifecycle review decisions appear on individual rows; they do not remove findings from, or change counts in, the fixed sample portfolio summaries.
 
-A **Hub Admin** can create an **APS recurring request** with a relative activity window and refresh the cached request definitions, subject to Autodesk Data Connector permissions. Lens repeats a live Hub Admin check before requesting or scheduling an extract, refreshing jobs or schedules, or ingesting completed activity/reporting data. Executive Overview users can view the cached extract and dashboard information. For one-time or recurring requests, leave the optional project selector empty for a hub-wide extract, or select up to 50 projects. Autodesk's own Data Connector entitlement and project permissions also apply. APS runs the schedule; this app does not ingest those jobs automatically. Use **Refresh jobs**, then **Ingest** on each completed activity job. The schedules table does not provide a verified next-run time, and this app does not offer pause or delete controls. A schedule absent from the latest complete APS refresh is labeled unverified rather than active.
+### Review data and closeout
 
-## Tools
+Under **Data**, inspect sample extracts, Data Health, and Integration Health. Read a sample integration manifest and its migration or contract findings. No production pipeline is contacted and no scheduler is started.
 
-The **Tools** page contains 21 Forma tool dashboards. This path is separate from this app's **Extracts** page. In Autodesk Construction Cloud, open a project in the target hub and choose **Insight** in the product picker, then **Data Connector** in Insight's left sidebar. [Autodesk's Data Connector guide](https://help.autodesk.com/cloudhelp/ENU/Docs-Insight/files/Data_Connector.html) describes the permissions and extraction steps. If the product picker does not expose Insight from the hub view, open a project first; a project dashboard may use `https://acc.autodesk.com/insight/accounts/<hubId>/projects/<projectId>/my-dashboard`, with IDs for a project you can access.
+Under **Projects → Closeout**, inspect a project, its turnover profile, source evidence, and exception list. The document metadata and asset relationships are fictional. This demo does not download project files or produce an accepted handover package.
 
-Run an extraction in Insight and wait for Autodesk's completion email (sent to the Hub Admin in the reviewed setup). Use its **View in Data Connector** link, or return to Insight's Data Connector area, and download the ZIP. A **Hub Admin** can then go to **Tools → Choose File → Upload extract** to replace shared reporting tables. Dashboards enable only when their required CSVs are present. The table and row totals reflect the uploaded ZIP; a warning appears if a CSV reaches the 400,000-row import cap. ZIP uploads are limited to 256 MB compressed, 128 MB per inflated entry, 512 MB inflated total, and 500 entries.
+### Practice administration
 
-Lens does not authenticate a user-supplied ZIP or verify which Autodesk hub produced it. The Tools upload list labels its source hub **unverified**; interpret reports from that dataset accordingly. Executive Overview users may view the resulting dashboards, but cannot replace the shared ZIP dataset.
+Open **Admin → Bulk management**. Choose sample projects and fictional email addresses, preview an operation, check the confirmation box, and run the simulation. The simulator verifies against its own in-memory workspace and displays simulated results. **Reset simulation** restores the initial view; leaving the view also resets it.
 
-`Sync projects` on **Overview** only updates the Admin API project list. It does not download the Insight ZIP or enable Tools dashboards. Insight extractions also do not appear in this app's **Extracts** job list.
+Try adding members, removing members, creating projects, and archiving projects. Product choices are demonstration inputs, not subscriptions or entitlements. The provisioning recipe is an immutable example.
 
-Each file is loaded under its own name. For example, `admin_projects.csv` becomes the `admin_projects` table. That is how the Power BI templates bind their data (`Csv.Document(File.Contents(SourceFolder & "\\admin_projects.csv"))`), so the same extract that drives the `.pbit` files drives these dashboards.
+## Personal browser state
 
-Selecting a tool opens a near-full-screen dashboard. Use **Esc**, **Close**, **Back to tools**, or click outside the dashboard to return to the menu. A tool is greyed out when its primary CSV is not in the extract.
+Saved views, watchlist entries, governance/lifecycle review decisions, and favorite tools are stored locally in the browser. They are not server audit records, cross-device preferences, notifications, or scheduled checks. Clearing browser storage removes them. **Reset my demo preferences** clears saved views, watchlist entries, and governance/lifecycle decisions in this browser. Tool favorites are separate and can be changed in the tool library. Preferences are shared by people using the same browser profile; there is no visitor-account separation.
 
-## People and access matrix
+## Legacy sign-in links
 
-Upload an Insight ZIP with `admin_users.csv` and `admin_project_users.csv`, then open **People**. Search the user directory, select a person to inspect their uploaded record and project memberships, or switch to **Access matrix** to filter memberships by person, project, or status. Product access needs `admin_project_user_products.csv`; project names need `admin_projects.csv`. Each view shows import timestamps, missing inputs, and truncation warnings. It joins records by source IDs and does not guess that a role definition in `admin_project_roles.csv` belongs to a person.
+Old demo login and callback links return to the home page. The current demo does not establish an Autodesk session or ask visitors to sign out. To access a real hub, open the optional **Live hub** link to the separate application and complete its own sign-in and authorization checks.
 
-## Portfolio review
-
-- **Search** finds projects from the last **Sync projects** and people/companies from uploaded `admin_users.csv` and `admin_companies.csv`. Results are paginated and show their source age.
-- **Governance** shows quiet-project, past-end-date, missing-job-number, large-membership, and no-project-members review prompts. You can adjust the quiet-day and membership thresholds. Review the source window before interpreting a quiet project.
-- **Lifecycle** lists possible archive candidates and the archived projects in the synced inventory. Open a project scorecard and verify open work and contractual requirements in Forma before using Manage to archive.
-- **Permissions** browses Docs folders for a synced project and displays Autodesk's assignment records for the selected folder. Folder visibility follows the signed-in user's Autodesk access. The page does not calculate effective permissions for an individual user.
-- **Data health** shows locally known failed jobs, activity jobs needing ingest, import age and truncation, tool source gaps, mixed ZIP lineage, and CSV-header changes since a local baseline. Its 72-hour age rule is a review aid, not an Autodesk freshness guarantee.
-- **Saved** stores Activity, People, Governance, and Search filter links and bookmarks projects or people under your Autodesk identity. Overview shows the bookmark counts. Saved does not monitor source changes or send alerts.
-
-See the [feature guide](FEATURES.md) for source and scope details for all 13 feature areas.
-
-## Manage and administrator workflows
-
-The **Manage** page performs hub-management writes. These operations require Hub Admin access and `account:write`. Each operation has a preview, a single-use execution step, and a local per-item audit record. Preview plans expire after ten minutes; review the result and audit log after execution. Accepted bulk member imports may still be processing in Autodesk.
-
-| Operation | Endpoint |
-| --- | --- |
-| Bulk add members | `POST construction/admin/v2/projects/:projectId/users:import` (≤200 per call) |
-| Bulk remove members | `DELETE construction/admin/v1/projects/:projectId/users/:userId` |
-| Bulk create projects | `POST construction/admin/v1/accounts/:hub/projects` (≤50 per run) |
-| **Bulk archive projects** | `PATCH hq/v1/accounts/:hub/projects/:id` (≤50 per run) |
-| Companies | `GET construction/admin/v1/accounts/:hub/companies` |
-| Roles | Read from `admin_project_roles.csv` in the extract |
-
-Add and remove operations take a list of projects and a newline-separated member list, so one submission fans out across projects. Removal requires typing `REMOVE` to confirm.
-
-There is **no hub-wide "list roles" endpoint** in the Forma Admin API, so the Roles view reads `admin_project_roles.csv` from the uploaded extract.
-
-**Offboarding** lets a Hub Admin look up one exact email in Autodesk's live hub directory, inspect project/product/role associations, and prepare project-membership removal batches through the same Manage preview and audit. It does not remove the person from organization-wide Autodesk User Management. Its last observed activity is from the local extract and may be incomplete.
-
-**Recipes** saves project creation defaults per signed-in Autodesk user and hub. Refresh native template projects, save a recipe, enter project names, inspect the generated names/job numbers in the preview, then execute. Project creation and template application are asynchronous. After Autodesk has activated the new projects, run **Sync projects**, follow the recipe's **Use saved member presets** link into Manage, select the active projects, and review the prefilled member emails, products, access level, and invitation-email setting. The existing **Add Members** preview and confirmation sends that separate import; recipe creation itself does not assign members. The link loads the *current saved recipe*, so review its values if you edited the recipe after project creation.
-
-The **Administrative audit** under Manage records only actions initiated by this app. Its list, operation details, and exports require a fresh Hub Admin check. Open an operation for per-item status or export its record. “Submitted” means Autodesk accepted an asynchronous request; it does not confirm that membership has finished applying.
-
-## Typical workflow
-
-1. Go to **Extracts** → pick a window → check `activities` → **Submit data request**.
-2. Wait for the Data Connector job to complete, then use **Refresh jobs** until the job reads `complete`.
-3. Select **Ingest**. The rows land in the activity cache and the activity-based views update. Tools, People, company search, and workflow tables still need the separate Insight ZIP.
-
-Ingesting overlapping windows is safe. Rows are de-duplicated by fingerprint, so you can re-ingest without creating duplicates.
-
-To enable the **Tools** dashboards independently:
-
-1. In Autodesk Construction Cloud, open **Insight › Data Connector** for an accessible project in the hub, request the needed tool data, and download the CSV ZIP after the completion email arrives.
-2. As a Hub Admin, open **Tools**, choose the ZIP, then select **Upload extract**.
-3. The counter and dashboard cards update for the CSVs present. Tools whose source CSVs are absent remain unavailable.
-
----
-
-## Development
-
-### Prerequisites
-
-Before running the sample locally, you need:
-
-- Node.js 22 or later,
-- npm,
-- an Autodesk Platform Services application configured as a **Traditional Web App**,
-- access to an Autodesk Forma hub,
-- a Forma account with **Hub Admin** or **Executive Overview** rights, and
-- APS application credentials, and
-- the APS Client ID provisioned for the target Forma/ACC account under **Hub Admin › Custom Integrations**; follow [Autodesk's provisioning steps](https://get-started.aps.autodesk.com/#provision-access-in-other-products).
-
-Storage uses the Node 22+ built-in `node:sqlite`, so there is no native dependency to compile.
-
-### Install dependencies
-
-```bash
-npm install
-```
-
-### Environment variables
-
-Copy `.env.example` to `.env.local` and fill it in. `.env.local` is gitignored — keep it that way.
-
-| Variable | Meaning |
-| --- | --- |
-| `APS_CLIENT_ID` / `APS_CLIENT_SECRET` | From <https://aps.autodesk.com/myapps>. The app must be a **Traditional Web App**. |
-| `APS_CALLBACK_URL` | Must exactly match a callback registered on the APS app. Use `http://localhost:3000/api/aps/callback` locally. Autodesk tutorial examples use port 8080; this app uses port 3000 and a different callback path. |
-| `FORMA_HUB_ID` | Hub ID **without** the `b.` prefix that the Data Management API uses. |
-| `FORMA_REGION` | Optional: `US`, `EMEA`, or `AUS`. Blank lets Autodesk route automatically. |
-| `DATA_DIR` | Where the local cache lives. Default `.data`. |
-
-### Authentication and required scopes
-
-Data Connector requires a **user-context** token. A two-legged client-credentials token will not work for Data Connector because Autodesk scopes the extract to the signed-in user's hub permissions.
-
-Sign in with an account that holds **Hub Admin** or **Executive Overview** on the configured hub. At sign-in and periodically afterward, the app verifies the signed-in identity against that hub's account directory and denies other roles. Either admitted role can view portfolio reports, cached Extracts information, and Tools dashboards. A fresh Hub Admin check is required for extract requests, scheduling, job/schedule refreshes, activity/reporting ingestion, shared ZIP dataset replacement, project sync, recipe writes, offboarding, live Manage operations, schema acknowledgement, closeout package downloads, and administrative audit access. Autodesk may further limit API operations and live Docs reads to resources your account can access.
-
-Scopes requested:
-
-- `data:read`
-- `data:create`
-- `account:read`
-- `account:write`
-- `user-profile:read`
-- `openid`
-
-> `account:write` backs the Hub management writes. If you signed in before that scope was added, **sign out and back in** or the bulk operations will return 403.
-
-### Run locally
-
-```bash
-npm run dev
-```
-
-Open <http://localhost:3000> and sign in.
-
-### Tests and validation
-
-```bash
-npm test                 # Regression tests for data, dashboards, authentication, and features
-npm run typecheck
-npm run build
-npm run test:server-smoke # requires a production build; checks dev/prod HTTP responses
-npm run sample-extract   # writes sample-extract.zip — a synthetic extract for trying the Tools tab
-```
-
-`npm run test:dashboards` builds a synthetic extract with the real CSV and column names, ingests it, then asserts that every KPI and every chart on all 21 dashboards resolves and returns rows.
-
-The [CI workflow](../.github/workflows/ci.yml) runs install, typecheck, all tests, build, and HTTP smoke checks on Windows and Linux with Node.js 24. It triggers for pull requests and pushes to `main`, and can be run manually from GitHub's Actions tab after the workflow reaches the default branch. It uses fixture data and placeholder build settings, so no APS secrets or hub access are needed. The checks validate local behavior; testing a real Autodesk sign-in still requires the application's own APS configuration.
+For public hosting, follow the [deployment overview](DEPLOYMENT.md) and [Dokku branch-switch guide](DOKKU.md). The preferred target is [forma-hub-lens.autodesk.io](https://forma-hub-lens.autodesk.io/). The hosting administrator must deploy the new `demo` source; this code change does not perform that deployment. The separate personal Vercel deployment remains unchanged, with [optional instructions](VERCEL.md).

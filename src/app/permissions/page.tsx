@@ -4,7 +4,8 @@ import { ApsError } from "@/lib/aps/client";
 import { cachedProjects } from "@/lib/aps/admin";
 import { fetchCompanies } from "@/lib/aps/hubAdmin";
 import { permissionSubjectIdentities, type SubjectIdentity } from "@/lib/entityProfiles";
-import { configProblems } from "@/lib/env";
+import { configProblems, env } from "@/lib/env";
+import { demoChildFolders, demoFolderDetails, demoFolderPermissions, demoTopFolders } from "@/lib/demoPermissions";
 import {
   childFolders,
   diffPermissionAssignments,
@@ -64,6 +65,7 @@ export default async function PermissionsPage({
   const session = await getSession();
   if (!session) return <SignInRequired />;
 
+  const demoMode = env.demoMode;
   const projects = cachedProjects();
   const query = await searchParams;
   const projectId = first(query.project);
@@ -92,7 +94,26 @@ export default async function PermissionsPage({
   let compareChildrenError: string | null = null;
   let comparePermissionsError: string | null = null;
 
-  if (project) {
+  if (project && demoMode) {
+    roots = demoTopFolders(project.id);
+    if (folderId && validFolderId) {
+      selected = demoFolderDetails(project.id, folderId);
+      if (selected) {
+        children = demoChildFolders(project.id, folderId);
+        permissions = demoFolderPermissions(project.id, folderId);
+      } else folderError = "This sample folder is not in the selected project.";
+    }
+    if (compareProject && folderId && validFolderId) {
+      compareRoots = demoTopFolders(compareProject.id);
+      if (compareFolderId && validCompareFolderId) {
+        compareSelected = demoFolderDetails(compareProject.id, compareFolderId);
+        if (compareSelected) {
+          compareChildren = demoChildFolders(compareProject.id, compareFolderId);
+          comparePermissions = demoFolderPermissions(compareProject.id, compareFolderId);
+        } else compareFolderError = "This sample folder is not in the comparison project.";
+      }
+    }
+  } else if (project) {
     const sourceRequest = Promise.allSettled([
       topFolders(session, project.id),
       folderId && validFolderId ? folderDetails(session, project.id, folderId) : Promise.resolve(null),
@@ -132,20 +153,24 @@ export default async function PermissionsPage({
     ? diffPermissionAssignments(permissions, comparePermissions) : null;
   const subjects = [...permissions, ...comparePermissions];
   const companySubjects = subjects.some((entry) => entry.subjectType.toLowerCase().includes("company"));
-  const companies = companySubjects ? await fetchCompanies(session).catch(() => []) : [];
+  const companies = !demoMode && companySubjects ? await fetchCompanies(session).catch(() => []) : [];
   const identities = permissionSubjectIdentities(subjects, companies);
 
   return (
     <div className="space-y-5">
       <div>
         <h1 className="text-lg font-semibold">Docs permissions</h1>
-        <p className="mt-0.5 text-xs text-adsk-gray">Inspect folder permission assignments across projects. Autodesk controls which folders your account can see.</p>
+        <p className="mt-0.5 text-xs text-adsk-gray">
+          {demoMode
+            ? "Explore synthetic Docs folders and assignment records across sample projects. This does not calculate effective access or query Autodesk Docs."
+            : "Inspect folder permission assignments across projects. Autodesk controls which folders your account can see."}
+        </p>
       </div>
 
       <Card title="Choose a project">
         {projects.length === 0 ? (
-          <EmptyState title="No projects synced yet.">
-            <p>Sync projects from the <Link href="/projects" className="text-adsk-link hover:underline">Projects</Link> tab first.</p>
+          <EmptyState title={demoMode ? "No sample projects are available." : "No projects synced yet."}>
+            <p>{demoMode ? "The demo owner can restore the synthetic data set." : <>Sync projects from the <Link href="/projects" className="text-adsk-link hover:underline">Projects</Link> tab first.</>}</p>
           </EmptyState>
         ) : (
           <form method="get" className="flex flex-wrap items-end gap-3">
@@ -173,7 +198,7 @@ export default async function PermissionsPage({
       </Card>
 
       {projectId && !project && (
-        <Card><EmptyState title="Project not found in the synced hub list." /></Card>
+        <Card><EmptyState title={demoMode ? "Project not found in the sample hub." : "Project not found in the synced hub list."} /></Card>
       )}
 
       {project && (
@@ -181,7 +206,7 @@ export default async function PermissionsPage({
           <Card title="Folders" subtitle={project.name}>
             <Link href={`/projects/${encodeURIComponent(project.id)}`} className="mb-3 inline-block text-xs text-adsk-link hover:underline">Open project profile →</Link>
             {rootError && <p role="alert" className="text-xs text-adsk-linkvisited">{rootError}</p>}
-            {!rootError && roots.length === 0 && <p className="text-xs text-adsk-gray">No accessible Docs folders were returned.</p>}
+            {!rootError && roots.length === 0 && <p className="text-xs text-adsk-gray">{demoMode ? "No sample Docs folders are available for this project." : "No accessible Docs folders were returned."}</p>}
             <ul className="space-y-1">
               {roots.map((folder) => (
                 <li key={folder.id}>
@@ -263,7 +288,7 @@ export default async function PermissionsPage({
                             {item.inherited === true ? "Inherited" : item.inherited === false ? "Direct" : "Not specified"}
                             {item.parseIssue && <div className="mt-1 text-[10px] text-adsk-linkvisited">Excluded from diff: {item.parseIssue}</div>}
                             <details className="mt-1">
-                              <summary className="cursor-pointer text-[10px] text-adsk-link">API entry</summary>
+                              <summary className="cursor-pointer text-[10px] text-adsk-link">{demoMode ? "Sample entry" : "API entry"}</summary>
                               <pre className="mt-1 max-w-[28rem] overflow-x-auto rounded bg-adsk-offwhite p-2 text-[10px] text-adsk-black">{JSON.stringify(item.raw, null, 2)}</pre>
                             </details>
                           </td>
@@ -290,7 +315,7 @@ export default async function PermissionsPage({
               {compareProject && <div className="mt-4 border-t border-adsk-lightgray pt-3">
                 <p className="text-xs font-medium text-adsk-black">{compareProject.name}</p>
                 {compareRootError && <p role="alert" className="mt-2 text-xs text-adsk-linkvisited">{compareRootError}</p>}
-                {!compareRootError && compareRoots.length === 0 && <p className="mt-2 text-xs text-adsk-gray">No accessible top folders were returned.</p>}
+                {!compareRootError && compareRoots.length === 0 && <p className="mt-2 text-xs text-adsk-gray">{demoMode ? "No sample top folders are available." : "No accessible top folders were returned."}</p>}
                 <div className="mt-2 flex flex-wrap gap-1.5">
                   {compareRoots.map((folder) => <Link key={folder.id} href={comparisonHref(project.id, folderId, compareProject.id, folder.id)} className={`rounded border border-adsk-lightgray px-2 py-1 text-xs hover:bg-adsk-offwhite ${folder.id === compareFolderId ? "bg-adsk-yellow/20 font-medium" : ""}`}>{folder.name}</Link>)}
                 </div>
@@ -306,7 +331,7 @@ export default async function PermissionsPage({
               </div>}
               {diff && <div className="mt-4 border-t border-adsk-lightgray pt-3">
                 <p className="text-xs text-adsk-gray">{diff.differences.length} assignment difference(s) · {diff.unchangedSubjects} unchanged subject(s) · {permissions.length} and {comparePermissions.length} records returned</p>
-                {(diff.skippedLeft > 0 || diff.skippedRight > 0) && <p role="alert" className="mt-2 text-xs text-adsk-linkvisited">{diff.skippedLeft} source and {diff.skippedRight} comparison record(s) lacked usable subject IDs or actions and were excluded from this diff. Inspect their API entries.</p>}
+                {(diff.skippedLeft > 0 || diff.skippedRight > 0) && <p role="alert" className="mt-2 text-xs text-adsk-linkvisited">{diff.skippedLeft} source and {diff.skippedRight} comparison record(s) lacked usable subject IDs or actions and were excluded from this diff. Inspect their {demoMode ? "sample" : "API"} entries.</p>}
                 {diff.differences.length ? <div className="mt-3 overflow-x-auto"><table className="w-full text-left text-xs">
                   <thead className="text-[11px] uppercase tracking-wide text-adsk-gray"><tr className="border-b border-adsk-lightgray"><th className="py-2 pr-3 font-medium">Subject</th><th className="py-2 pr-3 font-medium">Source actions</th><th className="py-2 pr-3 font-medium">Comparison actions</th><th className="py-2 font-medium">Assignment difference</th></tr></thead>
                   <tbody>{diff.differences.map((row) => <tr key={`${row.subjectType}:${row.subjectId}`} className="border-b border-adsk-offwhite align-top">
@@ -320,7 +345,7 @@ export default async function PermissionsPage({
               </div>}
             </Card>}
             <p className="text-xs leading-relaxed text-adsk-gray">
-              These are the assignments returned for a folder. A person may also receive access through a role, company, parent folder, or Project Admin status. Lens does not calculate a person’s effective Docs access here.
+              {demoMode ? "These are synthetic assignment records for a sample folder." : "These are the assignments returned for a folder."} A person may also receive access through a role, company, parent folder, or Project Admin status. Lens does not calculate a person’s effective Docs access here.
             </p>
           </div>
         </div>

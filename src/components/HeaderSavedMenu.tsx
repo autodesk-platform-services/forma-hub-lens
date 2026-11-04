@@ -1,16 +1,18 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
+import { useDemoPreferences } from "./DemoPreferences";
 
 type View = { id: string; name: string; path: string };
 type Watch = { kind: "project" | "person"; targetId: string; label: string };
 type Summary = { hasOwner: boolean; views: View[]; watched: Watch[] };
 
-export function HeaderSavedMenu({ initial }: { initial: Summary }) {
+export function HeaderSavedMenu({ initial, owner = null }: { initial: Summary; owner?: string | null }) {
   const detailsRef = useRef<HTMLDetailsElement>(null);
-  const [summary, setSummary] = useState(initial);
-  const [loading, setLoading] = useState(false);
+  const { state, ready } = useDemoPreferences(owner);
+  const summary = { hasOwner: initial.hasOwner, views: state.views.slice(0, 4), watched: state.watched.slice(0, 4) };
+  const loading = !ready;
 
   useEffect(() => {
     const onPointerDown = (event: PointerEvent) => {
@@ -27,21 +29,10 @@ export function HeaderSavedMenu({ initial }: { initial: Summary }) {
     };
   }, []);
 
-  async function refresh() {
-    setLoading(true);
-    try {
-      const response = await fetch("/api/saved/summary", { cache: "no-store" });
-      if (response.ok) setSummary(await response.json() as Summary);
-    } catch {
-      // Keep the last known menu items available while offline.
-    } finally {
-      setLoading(false);
-    }
-  }
 
   const close = () => detailsRef.current?.removeAttribute("open");
   return (
-    <details ref={detailsRef} className="relative" onToggle={(event) => { if (event.currentTarget.open) void refresh(); }}>
+    <details ref={detailsRef} className="relative">
       <summary aria-label="Saved items menu"
         className="cursor-pointer list-none rounded px-2 py-1.5 font-legend text-xs text-adsk-lightgray hover:bg-white/10 hover:text-adsk-white [&::-webkit-details-marker]:hidden">
         <span aria-hidden="true" className="mr-1 text-adsk-yellow">★</span> Saved <span aria-hidden="true" className="text-[10px]">▾</span>
@@ -62,7 +53,7 @@ export function HeaderSavedMenu({ initial }: { initial: Summary }) {
             <span className="shrink-0 text-[10px] uppercase text-adsk-gray">{item.kind}</span><span className="truncate">{item.label}</span>
           </Link>
         )) : <p className="px-2 py-1.5 text-[11px] text-adsk-gray">No watched projects or people yet.</p>}
-        {!summary.hasOwner && <p className="mt-2 px-2 text-[11px] text-adsk-gold">Autodesk did not provide a stable identity for saved items.</p>}
+        {!summary.hasOwner && <p className="mt-2 px-2 text-[11px] text-adsk-gold">Demo saved items are unavailable. Reload this page to try again.</p>}
         <Link href="/views" onClick={close}
           className="mt-2 block rounded border-t border-adsk-gray px-2 py-2 text-xs font-medium text-adsk-yellow hover:bg-white/10">
           Manage saved items →

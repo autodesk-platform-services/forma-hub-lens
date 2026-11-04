@@ -1,4 +1,4 @@
-/** Browser-local favorites are scoped to the hub and signed-in Autodesk identity. */
+/** Demo favorites stay in this browser profile and are scoped to the synthetic hub. */
 export function toolFavoritesKey(hubId: string, owner: string | null): string | null {
   return owner ? `forma-hub-lens:favorite-tools:${hubId}:${owner}` : null;
 }

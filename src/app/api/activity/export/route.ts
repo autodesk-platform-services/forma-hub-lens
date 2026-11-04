@@ -25,7 +25,7 @@ const COLUMNS = [
 export async function GET(request: NextRequest) {
   const session = await getSession();
   if (!session) {
-    return NextResponse.json({ error: "Not signed in" }, { status: 401 });
+    return NextResponse.json({ error: "Demo configuration is invalid" }, { status: 503 });
   }
 
   const params: SearchParams = {};

@@ -23,7 +23,7 @@ export default async function CloseoutPage() {
   return <div className="space-y-6">
     <header className="flex flex-wrap items-end justify-between gap-3">
       <div><h1 className="font-legend text-2xl text-adsk-black">Closeout readiness</h1>
-        <p className="mt-1 max-w-3xl text-sm text-adsk-gray">Set a turnover profile, inspect exact project evidence, resolve exceptions, then build and accept a local handover package. Assessment states are saved snapshots.</p></div>
+        <p className="mt-1 max-w-3xl text-sm text-adsk-gray">Explore a sample turnover standard and the fictional records behind closeout exceptions. Profiles and selected document metadata are read-only; no real package is assembled.</p></div>
       <Link className="rounded bg-adsk-black px-4 py-2 text-sm text-white" href="/closeout/profiles">Turnover profiles</Link>
     </header>
     <div className="grid gap-3 sm:grid-cols-4">
@@ -42,7 +42,7 @@ export default async function CloseoutPage() {
       {portfolio.totalProjects > rows.length && <p className="mt-3 text-xs text-adsk-gray">Showing the first 500 of {portfolio.totalProjects} projects. Open a project through its exact ID URL to review the rest.</p>}
     </Card>
     <Card title="Recent packages">
-      {packages.length === 0 ? <p className="text-sm text-adsk-gray">No closeout packages built yet.</p> :
+      {packages.length === 0 ? <p className="text-sm text-adsk-gray">Package generation is disabled in the demo. Explore the sample record set on a project instead.</p> :
       <ul className="space-y-2 text-sm">{packages.map((item) => <li key={item.id} className="flex flex-wrap justify-between gap-2 border-b border-adsk-lightgray/70 pb-2">
         <Link className="text-adsk-link hover:underline" href={`/closeout/packages/${item.id}`}>{item.projectId} · {item.status}</Link><time>{date(item.createdAt)}</time>
       </li>)}</ul>}

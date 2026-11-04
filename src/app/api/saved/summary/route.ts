@@ -1,19 +1,20 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/aps/auth";
-import { listSavedViews, listWatchItems, savedViewsOwner } from "@/lib/savedViews";
+import { savedViewsOwner } from "@/lib/savedViews";
 
 export const dynamic = "force-dynamic";
 
-/** Keep the persistent header menu in step with user-owned local saves. */
+/** No visitor preferences are stored or returned by the demo server. */
 export async function GET() {
   try {
     const session = await getSession();
-    if (!session) return NextResponse.json({ error: "Not signed in" }, { status: 401, headers: { "Cache-Control": "private, no-store" } });
+    if (!session) return NextResponse.json({ error: "Demo configuration is invalid" }, { status: 503, headers: { "Cache-Control": "private, no-store" } });
     const owner = savedViewsOwner(session);
     return NextResponse.json({
       hasOwner: Boolean(owner),
-      views: owner ? listSavedViews(owner).slice(0, 4) : [],
-      watched: owner ? listWatchItems(owner).slice(0, 4) : [],
+      views: [],
+      watched: [],
+      storage: "browser-only",
     }, { headers: { "Cache-Control": "private, no-store" } });
   } catch {
     return NextResponse.json({ error: "Saved items are temporarily unavailable." }, { status: 503, headers: { "Cache-Control": "private, no-store" } });

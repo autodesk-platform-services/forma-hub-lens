@@ -1,10 +1,10 @@
-name: CI
+name: Demo CI
 
 on:
-  pull_request:
-    branches: [main]
   push:
-    branches: [main]
+    branches: [demo, codex/dokku-demo]
+  pull_request:
+    branches: [demo]
   workflow_dispatch:
 
 permissions:
@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   verify:
-    name: Node 24 / ${{ matrix.os }}
+    name: Demo / Node 24 / ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 25
     strategy:
@@ -25,39 +25,37 @@ jobs:
         os: [ubuntu-latest, windows-latest]
     env:
       NEXT_TELEMETRY_DISABLED: "1"
-
     steps:
-      - name: Check out source
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-
-      - name: Set up Node.js 24
-        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "24"
           cache: npm
           cache-dependency-path: package-lock.json
-
-      - name: Install locked dependencies
-        run: npm ci
-
-      - name: Check TypeScript
-        run: npm run typecheck
-
-      - name: Run regression tests
-        run: npm test
-
-      - name: Build production app
-        run: npm run build
-        env:
-          # Build placeholders only. No real APS application or hub is used.
-          APS_CLIENT_ID: ci-client
-          APS_CLIENT_SECRET: ci-placeholder
-          APS_CALLBACK_URL: http://localhost:3000/api/aps/callback
-          FORMA_HUB_ID: 00000000-0000-0000-0000-000000000000
-          LENS_MODE: live
-
-      - name: Check development and production HTTP servers
-        run: npm run test:server-smoke
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - name: Check anonymous pages and dashboards
+        run: npm run test:smoke
         timeout-minutes: 10
+
+  container:
+    name: Demo / Docker
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+          package-manager-cache: false
+      - name: Build the Dokku image
+        run: docker build --tag forma-hub-lens-demo:ci .
+      - name: Verify the standalone container without credentials
+        run: node scripts/smoke-container.mjs forma-hub-lens-demo:ci

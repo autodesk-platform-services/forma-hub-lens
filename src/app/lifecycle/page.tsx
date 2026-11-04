@@ -15,7 +15,7 @@ import {
 import { savedViewsOwner } from "@/lib/savedViews";
 import { Card, EmptyState, Pill, Stat, formatDate, formatDateTime } from "@/components/ui";
 import { SetupRequired, SignInRequired } from "@/components/Gate";
-import { updateLifecycleDecision } from "./actions";
+import { DemoReviewControls } from "@/components/DemoPreferences";
 
 export const dynamic = "force-dynamic";
 
@@ -102,11 +102,12 @@ function ReviewChecklist({ item }: { item: ProjectEvidence }) {
   </details>;
 }
 
-function CandidateCard({ item, signals, decision, canSave }: {
+function CandidateCard({ item, signals, decision, canSave, owner }: {
   item: ProjectEvidence;
   signals: string[];
   decision?: Decision;
   canSave: boolean;
+  owner: string | null;
 }) {
   const assessment = archiveAssessment(item);
   const label = statusLabel(decision);
@@ -133,23 +134,18 @@ function CandidateCard({ item, signals, decision, canSave }: {
       {item.warnings.length > 0 && <Pill tone="warn">{item.warnings.length} data caution{item.warnings.length === 1 ? "" : "s"}</Pill>}
     </div>
     <ReviewChecklist item={item} />
-    {canSave && <form action={updateLifecycleDecision} className="mt-3 flex flex-wrap gap-2">
-      <input type="hidden" name="projectId" value={item.project.id} />
-      {decision?.choice !== "keep-active" && <button type="submit" name="choice" value="keep-active" className="rounded border border-adsk-lightgray px-2.5 py-1 text-[11px] text-adsk-black hover:bg-adsk-offwhite">Keep active</button>}
-      {decision?.choice !== "snoozed" && <button type="submit" name="choice" value="snoozed" className="rounded border border-adsk-lightgray px-2.5 py-1 text-[11px] text-adsk-black hover:bg-adsk-offwhite">Snooze 90 days</button>}
-      {decision?.choice !== "prepare-archive" && <button type="submit" name="choice" value="prepare-archive" className="rounded border border-adsk-gold bg-adsk-gold/10 px-2.5 py-1 text-[11px] text-adsk-black hover:bg-adsk-yellow">Prepare archive</button>}
-      {decision && <button type="submit" name="choice" value="reopen" className="rounded border border-adsk-lightgray px-2.5 py-1 text-[11px] text-adsk-gray hover:bg-adsk-offwhite">Clear my decision</button>}
-    </form>}
+    {canSave && <DemoReviewControls owner={owner} area="lifecycle" projectId={item.project.id} />}
   </li>;
 }
 
-function CandidateSection({ title, subtitle, items, signals, decisions, canSave, empty }: {
+function CandidateSection({ title, subtitle, items, signals, decisions, canSave, empty, owner }: {
   title: string;
   subtitle: string;
   items: ProjectEvidence[];
   signals: Map<string, string[]>;
   decisions: Map<string, Decision>;
   canSave: boolean;
+  owner: string | null;
   empty: string;
 }) {
   return <Card title={`${title} (${items.length})`} subtitle={subtitle}>
@@ -159,6 +155,7 @@ function CandidateSection({ title, subtitle, items, signals, decisions, canSave,
       signals={signals.get(item.project.id) ?? []}
       decision={decisions.get(item.project.id.toLowerCase())}
       canSave={canSave}
+      owner={owner}
     />)}</ul> : <EmptyState title={empty} />}
   </Card>;
 }
@@ -194,11 +191,9 @@ export default async function LifecyclePage({ searchParams }: { searchParams: Pr
   return <div className="space-y-5">
     <div>
       <h1 className="font-legend text-2xl text-adsk-black">Project lifecycle</h1>
-      <p className="mt-1 max-w-3xl text-sm text-adsk-gray">Review possible archive candidates and archived projects. A candidate is a prompt to investigate; decisions here are personal review states and do not change Autodesk project status.</p>
+      <p className="mt-1 max-w-3xl text-sm text-adsk-gray">Review possible archive candidates and archived projects. A candidate is a prompt to investigate; decisions here stay in this browser and do not change Autodesk project status. Summary counts describe the fixed sample; personal choices appear on each project.</p>
     </div>
     {message && <p role="status" className={`rounded border px-3 py-2 text-xs ${message.error ? "border-adsk-linkvisited bg-adsk-linkvisited/10" : "border-adsk-lightgray bg-adsk-white"}`}>{message.text}</p>}
-    {!owner && <p role="alert" className="rounded border border-adsk-gold bg-adsk-gold/10 px-3 py-2 text-xs">Autodesk did not provide a stable user ID or email. Lifecycle decisions cannot be saved for this sign-in.</p>}
-
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
       <Stat label="Review now" value={String(reviewNow.length)} hint="Current signals without a personal decision" />
       <Stat label="Prepare archive" value={String(prepared.length)} hint="Local review state; no project archived" />
@@ -206,13 +201,13 @@ export default async function LifecyclePage({ searchParams }: { searchParams: Pr
       <Stat label="Snoozed" value={String(snoozed.length)} hint="Returns to review after 90 days" />
     </div>
 
-    <CandidateSection title="Review now" subtitle="Active projects with a past stated end date or a possible quiet-project signal" items={reviewNow} signals={signals} decisions={decisions} canSave={Boolean(owner)} empty="No projects need lifecycle review under the current rules." />
-    <CandidateSection title="Prepared for archive review" subtitle="Resolve open work and manual checks before using Manage to preview any status change" items={prepared} signals={signals} decisions={decisions} canSave={Boolean(owner)} empty="No projects are marked Prepare archive." />
+    <CandidateSection title="Review now" subtitle="Active projects with a past stated end date or a possible quiet-project signal" items={reviewNow} signals={signals} decisions={decisions} canSave={Boolean(owner)} owner={owner} empty="No projects need lifecycle review under the current rules." />
+    <CandidateSection title="Prepared for archive review" subtitle="Resolve open work and manual checks before using Manage to preview any status change" items={prepared} signals={signals} decisions={decisions} canSave={Boolean(owner)} owner={owner} empty="No projects are marked Prepare archive." />
     {prepared.length > 0 && session.hubRole === "hub_admin" && <p className="text-xs text-adsk-gray">Ready to review an archive action? <Link href="/manage" className="text-adsk-link hover:underline">Open Manage and its audited archive preview →</Link></p>}
     {(kept.length > 0 || snoozed.length > 0) && <Card title="Other personal decisions" subtitle="These projects remain active in Autodesk">
       <div className="space-y-4">
-        {kept.length > 0 && <div><h3 className="mb-2 text-xs font-semibold text-adsk-black">Keep active ({kept.length})</h3><ul className="space-y-3">{kept.map((item) => <CandidateCard key={item.project.id} item={item} signals={signals.get(item.project.id) ?? []} decision={decisions.get(item.project.id.toLowerCase())} canSave={Boolean(owner)} />)}</ul></div>}
-        {snoozed.length > 0 && <div><h3 className="mb-2 text-xs font-semibold text-adsk-black">Snoozed ({snoozed.length})</h3><ul className="space-y-3">{snoozed.map((item) => <CandidateCard key={item.project.id} item={item} signals={signals.get(item.project.id) ?? []} decision={decisions.get(item.project.id.toLowerCase())} canSave={Boolean(owner)} />)}</ul></div>}
+        {kept.length > 0 && <div><h3 className="mb-2 text-xs font-semibold text-adsk-black">Keep active ({kept.length})</h3><ul className="space-y-3">{kept.map((item) => <CandidateCard key={item.project.id} item={item} signals={signals.get(item.project.id) ?? []} decision={decisions.get(item.project.id.toLowerCase())} canSave={Boolean(owner)} owner={owner} />)}</ul></div>}
+        {snoozed.length > 0 && <div><h3 className="mb-2 text-xs font-semibold text-adsk-black">Snoozed ({snoozed.length})</h3><ul className="space-y-3">{snoozed.map((item) => <CandidateCard key={item.project.id} item={item} signals={signals.get(item.project.id) ?? []} decision={decisions.get(item.project.id.toLowerCase())} canSave={Boolean(owner)} owner={owner} />)}</ul></div>}
       </div>
     </Card>}
 

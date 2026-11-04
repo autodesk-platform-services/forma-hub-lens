@@ -7,20 +7,26 @@
  */
 import { registerHooks } from "node:module";
 
+const root = new URL("../", import.meta.url);
+
 registerHooks({
   resolve(specifier, context, nextResolve) {
     if (specifier === "next/headers") {
       return nextResolve("next/headers.js", context);
     }
-    if (specifier.startsWith(".") && !/\.[cm]?[jt]sx?$/i.test(specifier)) {
+    if (specifier === "next/server") return nextResolve("next/server.js", context);
+    const candidate = specifier.startsWith("@/")
+      ? new URL(`src/${specifier.slice(2)}`, root).href
+      : specifier;
+    if ((candidate.startsWith(".") || candidate.startsWith("file:")) && !/\.[cm]?[jt]sx?$/i.test(candidate)) {
       for (const ext of [".ts", ".tsx", "/index.ts"]) {
         try {
-          return nextResolve(specifier + ext, context);
+          return nextResolve(candidate + ext, context);
         } catch {
           // fall through to the next candidate
         }
       }
     }
-    return nextResolve(specifier, context);
+    return nextResolve(candidate, context);
   },
 });

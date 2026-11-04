@@ -14,7 +14,6 @@ import {
 import type { Session } from "./aps/auth";
 import { requireLiveApsSession } from "./aps/client";
 import { listExtractFiles, signedUrlFor } from "./aps/dataConnector";
-import { isS3SignedUrl } from "./aps/signedDownload";
 
 /**
  * Turns a completed Data Connector extract into rows in the local `activities`
@@ -91,13 +90,8 @@ export async function ingestJob(session: Session, jobId: string): Promise<Ingest
 const MAX_ROWS_PER_ACTIVITY_FILE = 400_000;
 
 async function ingestFile(session: Session, jobId: string, name: string): Promise<number> {
-  const signed = await signedUrlFor(session, jobId, name);
-  if (signed.name !== name || !isS3SignedUrl(signed.signedUrl)) {
-    throw new Error(`Autodesk returned an invalid signed download for ${name}.`);
-  }
-  const res = await fetch(signed.signedUrl, {
-    cache: "no-store", credentials: "omit", redirect: "error", signal: AbortSignal.timeout(90_000),
-  });
+  const { signedUrl } = await signedUrlFor(session, jobId, name);
+  const res = await fetch(signedUrl, { cache: "no-store" });
   if (!res.ok || !res.body) {
     throw new Error(`Downloading ${name} failed with HTTP ${res.status}`);
   }

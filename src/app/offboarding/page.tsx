@@ -9,6 +9,7 @@ import { OffboardingRemovePanel } from "@/components/OffboardingRemovePanel";
 import { SetupRequired, SignInRequired } from "@/components/Gate";
 import { ActionForm } from "@/components/ActionForm";
 import { refreshProjects } from "@/app/actions";
+import { demoTableRows } from "@/lib/demoData";
 
 export const dynamic = "force-dynamic";
 
@@ -16,6 +17,77 @@ function namesForProject(items: OffboardingAssociation[], projectId: string): st
   return items.filter((item) => item.projectIds?.includes(projectId))
     .map((item) => item.name ?? item.key ?? item.id ?? "Unnamed")
     .join(", ") || "—";
+}
+
+function DemoOffboarding({ input }: { input: string }) {
+  const users = demoTableRows("admin_users").map((row) => ({
+    id: String(row.id ?? ""),
+    name: String(row.name ?? "Sample person"),
+    email: String(row.email ?? ""),
+    status: String(row.status ?? "Unknown"),
+    companyId: String(row.default_company_id ?? ""),
+  })).filter((row) => row.id && row.email);
+  const selected = users.find((row) => row.email.toLowerCase() === input.trim().toLowerCase());
+  const company = selected && demoTableRows("admin_companies").find((row) => row.id === selected.companyId);
+  const projectsById = new Map(cachedProjects().map((project) => [project.id, project]));
+  const memberships = selected
+    ? demoTableRows("admin_project_users").filter((row) => row.user_id === selected.id)
+    : [];
+  const projectIds = [...new Set(memberships.map((row) => String(row.bim360_project_id ?? "")).filter(Boolean))];
+  const products = selected
+    ? demoTableRows("admin_project_user_products").filter((row) => row.user_id === selected.id)
+    : [];
+  const manageHref = selected
+    ? `/manage?${new URLSearchParams({ task: "remove", email: selected.email }).toString()}`
+    : "/manage?task=remove";
+
+  return <div className="space-y-5">
+    <div>
+      <h1 className="font-legend text-2xl text-adsk-black">Offboarding and access cleanup</h1>
+      <p className="mt-1 max-w-3xl text-sm text-adsk-gray">Explore a sample person&apos;s project associations and prepare a simulated removal plan. No Autodesk access is inspected or changed here.</p>
+    </div>
+    <Card title="Choose a sample person" subtitle="Synthetic identities from the demo data set">
+      <form method="get" action="/offboarding" className="flex flex-wrap items-end gap-3">
+        <label className="block min-w-64 flex-1 text-xs text-adsk-gray">Person
+          <select name="email" required defaultValue={selected?.email ?? ""} className="mt-1 block w-full rounded border border-adsk-lightgray bg-adsk-white px-3 py-1.5 text-sm text-adsk-black">
+            <option value="">Select a sample person</option>
+            {users.map((user) => <option key={user.id} value={user.email}>{user.name} · {user.email}</option>)}
+          </select>
+        </label>
+        <button type="submit" className="rounded border border-adsk-gold bg-adsk-yellow px-3 py-1.5 font-legend text-xs text-adsk-black">Show sample plan</button>
+      </form>
+      {input && !selected && <p role="alert" className="mt-3 text-xs text-adsk-linkvisited">No sample person matches that email.</p>}
+    </Card>
+    {selected && <>
+      <Card title={selected.name} subtitle="Synthetic person and membership records">
+        <dl className="grid gap-3 text-xs sm:grid-cols-2 lg:grid-cols-4">
+          <div><dt className="text-adsk-gray">Email</dt><dd className="mt-1 text-adsk-black">{selected.email}</dd></div>
+          <div><dt className="text-adsk-gray">Company</dt><dd className="mt-1 text-adsk-black">{company?.name ? String(company.name) : "Not in sample data"}</dd></div>
+          <div><dt className="text-adsk-gray">Sample status</dt><dd className="mt-1 text-adsk-black">{selected.status}</dd></div>
+          <div><dt className="text-adsk-gray">Sample project associations</dt><dd className="mt-1 text-adsk-black">{projectIds.length}</dd></div>
+        </dl>
+        <p className="mt-3 text-xs text-adsk-gray">The sample does not model complete role, folder, or organization access. This plan cannot establish effective access or confirm deprovisioning.</p>
+      </Card>
+      <Card title={`Sample project associations (${projectIds.length})`}>
+        {projectIds.length ? <div className="overflow-x-auto"><table className="w-full text-left text-xs">
+          <thead className="text-adsk-gray"><tr className="border-b border-adsk-lightgray"><th scope="col" className="py-2 pr-3">Project</th><th scope="col" className="py-2 pr-3">Membership</th><th scope="col" className="py-2">Sample products</th></tr></thead>
+          <tbody>{projectIds.map((id) => {
+            const membership = memberships.find((row) => row.bim360_project_id === id);
+            const productNames = [...new Set(products.filter((row) => row.bim360_project_id === id).map((row) => String(row.product_key ?? "")).filter(Boolean))];
+            return <tr key={id} className="border-b border-adsk-offwhite align-top">
+              <td className="py-2 pr-3"><Link href={`/projects/${encodeURIComponent(id)}`} className="font-medium text-adsk-link hover:underline">{projectsById.get(id)?.name ?? id}</Link></td>
+              <td className="py-2 pr-3">{membership?.access_level === "admin" ? "Project Admin" : "Member"}</td>
+              <td className="py-2">{productNames.length ? productNames.join(", ") : "Not modeled"}</td>
+            </tr>;
+          })}</tbody>
+        </table></div> : <EmptyState title="This sample person has no project membership records." />}
+      </Card>
+      <Card title="Simulated removal plan" subtitle="Prepare a preview in the Demo action center">
+        <p className="text-xs text-adsk-gray">Select the sample projects you would remove this person from. The preview and result are simulations; nothing is sent to Autodesk.</p>
+        <Link href={manageHref} className="mt-3 inline-block rounded border border-adsk-gold bg-adsk-yellow px-3 py-1.5 font-legend text-xs text-adsk-black hover:opacity-90">Open simulated removal preview →</Link>
+      </Card>
+    </>}
+  </div>;
 }
 
 export default async function OffboardingPage({ searchParams }: {
@@ -27,6 +99,7 @@ export default async function OffboardingPage({ searchParams }: {
   if (!session) return <SignInRequired />;
   const params = await searchParams;
   const input = typeof params.email === "string" ? params.email.slice(0, 256) : "";
+  if (session.mode === "demo") return <DemoOffboarding input={input} />;
   if (session.hubRole !== "hub_admin") return <Card title="Hub Admin access required"><p className="text-sm text-adsk-gray">This access investigation is available to Hub Admins. Executive Overview can use the read-only People snapshot.</p></Card>;
 
   let summary: OffboardingSummary | null = null;

@@ -15,7 +15,7 @@ type SuggestionResponse = {
   total: number;
 };
 
-export function HeaderSearch() {
+export function HeaderSearch({ demoMode = false }: { demoMode?: boolean }) {
   const router = useRouter();
   const dialogRef = useRef<HTMLDialogElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -69,7 +69,7 @@ export function HeaderSearch() {
         const response = await fetch(`/api/search/suggest?q=${encodeURIComponent(term)}`, {
           cache: "no-store", signal: controller.signal,
         });
-        if (!response.ok) throw new Error(response.status === 401 ? "Sign in again to search." : "Suggestions are unavailable.");
+        if (!response.ok) throw new Error("Suggestions are unavailable. Reload the page to try again.");
         const body = await response.json() as SuggestionResponse;
         if (!controller.signal.aborted) setResults(body);
       } catch (cause) {
@@ -124,7 +124,9 @@ export function HeaderSearch() {
           <button type="button" onClick={close} aria-label="Close search" className="rounded px-2 py-1 text-xs text-adsk-gray hover:bg-adsk-offwhite">Esc</button>
         </div>
         <div id="header-search-results" role="listbox" aria-label="Portfolio suggestions" className="max-h-[58vh] overflow-y-auto p-2">
-          {!term && <p className="px-3 py-5 text-center text-xs text-adsk-gray">Search the cached project inventory and uploaded people and company tables.</p>}
+          {!term && <p className="px-3 py-5 text-center text-xs text-adsk-gray">{demoMode
+            ? "Search synthetic projects, people, and companies in the sample hub."
+            : "Search the cached project inventory and uploaded people and company tables."}</p>}
           {term.length === 1 && <p className="px-3 py-5 text-center text-xs text-adsk-gray">Type one more character for suggestions, or press Enter to view all results.</p>}
           {loading && term.length >= 2 && <p role="status" className="px-3 py-3 text-xs text-adsk-gray">Searching local sources…</p>}
           {error && <p role="alert" className="px-3 py-3 text-xs text-adsk-linkvisited">{error}</p>}
@@ -144,7 +146,9 @@ export function HeaderSearch() {
           </button>}
         </div>
         <p className="border-t border-adsk-lightgray px-4 py-2 text-[10px] text-adsk-gray">
-          Projects come from the last sync; people and companies come from a user-uploaded ZIP whose source hub is unverified.
+          {demoMode
+            ? "All search results on this deployment are synthetic sample records."
+            : "Projects come from the last sync; people and companies come from a user-uploaded ZIP whose source hub is unverified."}
           {term.length >= 2 && !loading && !error ? ` ${results.total.toLocaleString()} local matches.` : ""}
         </p>
       </dialog>

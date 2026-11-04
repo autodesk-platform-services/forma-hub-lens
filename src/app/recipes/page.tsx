@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { getSession } from "@/lib/aps/auth";
 import { PRODUCT_ACCESS_OPTIONS, PROJECT_TYPES } from "@/lib/aps/hubAdmin";
-import { configProblems } from "@/lib/env";
+import { configProblems, env } from "@/lib/env";
 import { cachedTemplates, listRecipes } from "@/lib/recipes";
 import { Card, EmptyState } from "@/components/ui";
 import { SetupRequired, SignInRequired } from "@/components/Gate";
@@ -18,6 +18,18 @@ export default async function RecipesPage({
   if (problems.length) return <SetupRequired problems={problems} />;
   const session = await getSession();
   if (!session) return <SignInRequired />;
+  if (env.demoMode) return <div className="space-y-5">
+    <h1 className="font-legend text-2xl">Project provisioning recipes · Demo</h1>
+    <p className="text-sm text-adsk-gray">A fictional standard shows how project defaults and follow-up access requirements can be assembled.</p>
+    <Card title="Healthcare project standard · Sample recipe"><dl className="grid gap-3 text-sm sm:grid-cols-2">
+      <div><dt className="text-adsk-gray">Project type</dt><dd>Hospital · Production</dd></div>
+      <div><dt className="text-adsk-gray">Naming</dt><dd>Northwind Healthcare — Project name</dd></div>
+      <div><dt className="text-adsk-gray">Product checklist</dt><dd>Docs · Build · Model Coordination</dd></div>
+      <div><dt className="text-adsk-gray">Access checklist</dt><dd>Project managers · Field leads · Owner representatives</dd></div>
+    </dl><p className="mt-4 text-xs text-adsk-gray">This example is read-only. The project-creation simulator accepts fictional names and creates results only within that view; it does not provision products or members.</p>
+    <Link href="/manage?task=projects" className="mt-4 inline-block text-sm text-adsk-link underline">Try the project-creation simulation →</Link></Card>
+  </div>;
+
   const recipes = listRecipes(session);
   const templates = cachedTemplates(session);
   const selectedId = (await searchParams).recipe;

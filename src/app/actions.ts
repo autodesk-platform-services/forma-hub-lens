@@ -1,12 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import {
-  clearSessionCookie,
-  destroySession,
-  getSession,
   requireHubAdminSession,
+  requireSession,
 } from "@/lib/aps/auth";
 import { cachedProjects, syncProjects } from "@/lib/aps/admin";
 import {
@@ -38,13 +35,6 @@ function selectedExtractProjects(formData: FormData): string[] | undefined {
   return ids;
 }
 
-export async function signOut(): Promise<void> {
-  const session = await getSession();
-  if (session) destroySession(session.id);
-  await clearSessionCookie();
-  redirect("/");
-}
-
 export async function refreshProjects(
   _prev: ActionState,
   _formData: FormData,
@@ -64,7 +54,7 @@ export async function refreshJobs(
   _formData: FormData,
 ): Promise<ActionState> {
   try {
-    const session = await requireHubAdminSession();
+    const session = await requireSession();
     const jobs = await listJobs(session);
     rememberJobs(jobs);
     revalidatePath("/extracts");
@@ -80,7 +70,7 @@ export async function requestExtract(
   formData: FormData,
 ): Promise<ActionState> {
   try {
-    const session = await requireHubAdminSession();
+    const session = await requireSession();
 
     const serviceGroups = formData.getAll("serviceGroups").map(String).filter(Boolean);
     if (serviceGroups.length === 0) {
@@ -160,7 +150,7 @@ export async function refreshSchedules(
   _formData: FormData,
 ): Promise<ActionState> {
   try {
-    const session = await requireHubAdminSession();
+    const session = await requireSession();
     const requests = await listRequests(session);
     rememberRequests(requests, Date.now(), true);
     revalidatePath("/extracts");
@@ -175,7 +165,7 @@ export async function requestRecurringExtract(
   formData: FormData,
 ): Promise<ActionState> {
   try {
-    const session = await requireHubAdminSession();
+    const session = await requireSession();
     const fromInput = String(formData.get("effectiveFromUtc") ?? "");
     const toInput = String(formData.get("effectiveToUtc") ?? "");
     if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(fromInput) ||
@@ -228,10 +218,11 @@ export async function ingestExtract(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
+  const jobId = String(formData.get("jobId") || "");
+  if (!jobId) return { ok: false, message: "Missing job id." };
+
   try {
-    const session = await requireHubAdminSession();
-    const jobId = String(formData.get("jobId") || "");
-    if (!jobId) return { ok: false, message: "Missing job id." };
+    const session = await requireSession();
 
     const job = await getJob(session, jobId);
     rememberJobs([job]);

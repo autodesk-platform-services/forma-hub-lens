@@ -1,4 +1,5 @@
 import "server-only";
+import { env } from "./env";
 
 import { evaluateIntegration } from "./integrationAnalysis";
 import { refreshPublishedChanges, refreshPublishedSchema } from "./integrationOfficial";
@@ -20,6 +21,7 @@ export type IntegrationMonitorResult = {
  * and evaluates local snapshots; it never refreshes account-scoped APS data.
  */
 export async function runScheduledIntegrationChecks(): Promise<IntegrationMonitorResult> {
+  if (env.demoMode) return { ran: false, manifestsChecked: 0, schemaRefreshed: false, changesRefreshed: false, errors: [] };
   if (!claimIntegrationMonitorRun()) {
     return { ran: false, manifestsChecked: 0, schemaRefreshed: false, changesRefreshed: false, errors: [] };
   }
