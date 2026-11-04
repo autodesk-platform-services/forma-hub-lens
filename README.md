@@ -15,6 +15,8 @@
 
 Forma Hub Lens brings portfolio reporting, access review, Data Connector workflows, and bulk administration into one web app for a configured Autodesk Forma hub. **Hub Admin** and **Executive Overview** users can read the portfolio. Live administration, project sync, Data Connector request/schedule/refresh/ingestion, shared dataset replacement, schema acknowledgement, closeout package downloads, and administrative audit access require a fresh Hub Admin check. Autodesk may impose additional permissions on individual APIs.
 
+[Live demo](https://forma-hub-lens.autodesk.io)
+
 ## What it does
 
 - **Overview and Projects:** review project inventory, activity trends, lifecycle candidates, and source coverage.
