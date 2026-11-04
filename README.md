@@ -15,7 +15,7 @@
 
 Forma Hub Lens brings portfolio reporting, access review, Data Connector workflows, and bulk administration into one web app for a configured Autodesk Forma hub. **Hub Admin** and **Executive Overview** users can read the portfolio. Live administration, project sync, Data Connector request/schedule/refresh/ingestion, shared dataset replacement, schema acknowledgement, closeout package downloads, and administrative audit access require a fresh Hub Admin check. Autodesk may impose additional permissions on individual APIs.
 
-[Live demo](https://forma-hub-lens.autodesk.io)
+[Hosted application](https://forma-hub-lens.autodesk.io)
 
 ## What it does
 
@@ -44,6 +44,12 @@ npm run dev
 ```
 
 Open <http://localhost:3000> and sign in. Keep `.env.local` private; it is ignored by Git. The app stores sessions and ingested hub data in a local SQLite directory, so use an approved persistent volume and access policy for shared deployment.
+
+## Deployment
+
+The organization's [`main` branch](https://github.com/autodesk-platform-services/forma-hub-lens/tree/main) is the live application described above. Its Autodesk sign-in, Hub Admin / Executive Overview access checks, and Hub Admin write checks remain required. See [live deployment considerations](docs/DEPLOYMENT.md).
+
+The dedicated [`demo` branch](https://github.com/autodesk-platform-services/forma-hub-lens/tree/demo) is an anonymous synthetic application, with [forma-hub-lens.autodesk.io](https://forma-hub-lens.autodesk.io/) as the preferred Dokku demo target. Follow the [Dokku demo handoff](docs/DOKKU-DEMO.md) to select that branch and fetch and build its source. Setting `LENS_MODE=demo` on live `main` or restarting its existing checkout does not install the demo. The hosting administrator must perform the branch switch and deployment; the separate personal repository and Vercel deployment remain independent.
 
 ## Continuous integration
 

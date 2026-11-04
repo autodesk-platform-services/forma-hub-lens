@@ -1,5 +1,9 @@
 # Deployment
 
+This guide covers the authenticated live application on the organization's [`main` branch](https://github.com/autodesk-platform-services/forma-hub-lens/tree/main). Its sign-in, Hub Admin / Executive Overview access checks, and Hub Admin write checks remain required.
+
+For the anonymous synthetic [`demo` branch](https://github.com/autodesk-platform-services/forma-hub-lens/tree/demo), use the separate [Dokku demo handoff](DOKKU-DEMO.md). That branch needs no APS credentials or persistent data volume. A hosting administrator must select `demo` and fetch and build its source; changing only `LENS_MODE` on live `main` is insufficient. The personal Vercel repository and deployment remain independent.
+
 Running this on localhost for yourself and running it for a team are different propositions. The difference is **the local cache**.
 
 Autodesk permission-checks calls made with the signed-in user's token, including Data Connector and Docs reads. Lens also uses an app-only token for exact hub-role verification, live offboarding directory lookup, and project archiving. Dashboards and activity views are served from this app's SQLite cache, so Autodesk does not check those cached reads.
